@@ -1,0 +1,26 @@
+{
+  "name": "boost-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Non-custodial veMEZO boost-allocation analytics for Mezo",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "npm run build --workspace @boost-relay/mezo",
+    "verify:addresses": "tsx scripts/verify-addresses.ts",
+    "verify:boost": "tsx scripts/verify-boost.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
