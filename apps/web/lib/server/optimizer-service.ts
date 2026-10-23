@@ -21,8 +21,8 @@ function calldataFor(r: Recommendation): string | null {
   return encodeFunctionData({ abi: boostVoterAbi, functionName: "vote", args: [r.voteCall.tokenId, [...r.voteCall.gauges], [...r.voteCall.weights]] })
 }
 
-async function compute(network: NetworkName, tokenId: bigint): Promise<Cached> {
-  const { entry } = await getMarket(network, { refresh: false })
+async function compute(network: NetworkName, tokenId: bigint, fresh: boolean): Promise<Cached> {
+  const { entry } = await getMarket(network, { refresh: fresh })
   const { snapshot } = entry
   const reader = readerFor(network)
   const block = snapshot.meta.blockNumber
@@ -84,13 +84,14 @@ async function compute(network: NetworkName, tokenId: bigint): Promise<Cached> {
   return { dto, computedAt: Date.now() }
 }
 
-export async function getRecommendation(network: NetworkName, tokenId: bigint): Promise<{ readonly result: Cached; readonly source: "fresh" | "cache" }> {
+/** fresh: bypass the recommendation cache and ask for a market re-read (used right after a confirmed vote). */
+export async function getRecommendation(network: NetworkName, tokenId: bigint, options: { readonly fresh?: boolean } = {}): Promise<{ readonly result: Cached; readonly source: "fresh" | "cache" }> {
   const key = `${network}:${tokenId}`
   const cached = state.results.get(key)
-  if (cached !== undefined && Date.now() - cached.computedAt < RESULT_TTL_MS) return { result: cached, source: "cache" }
+  if (options.fresh !== true && cached !== undefined && Date.now() - cached.computedAt < RESULT_TTL_MS) return { result: cached, source: "cache" }
   let pending = state.inflight.get(key)
   if (pending === undefined) {
-    pending = compute(network, tokenId)
+    pending = compute(network, tokenId, options.fresh === true)
       .then((r) => {
         state.results.set(key, r)
         return r

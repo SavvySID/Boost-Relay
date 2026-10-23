@@ -22,7 +22,7 @@ export async function GET(request: Request): Promise<NextResponse<OptimizerRespo
   }
   const tokenId = BigInt(raw)
   try {
-    const { result, source } = await getRecommendation(network, tokenId)
+    const { result, source } = await getRecommendation(network, tokenId, { fresh: url.searchParams.get("fresh") === "1" })
     return NextResponse.json({ ok: true, data: result.dto, served: { source, computedAt: new Date(result.computedAt).toISOString() } }, { headers: noStore })
   } catch (error) {
     const d = describeOptimizerError(error, network, tokenId)

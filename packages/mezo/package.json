@@ -14,6 +14,18 @@
     "./formatting": {
       "types": "./dist/formatting.d.ts",
       "import": "./dist/formatting.js"
+    },
+    "./abis": {
+      "types": "./dist/abis/index.d.ts",
+      "import": "./dist/abis/index.js"
+    },
+    "./chains": {
+      "types": "./dist/config/chains.d.ts",
+      "import": "./dist/config/chains.js"
+    },
+    "./addresses": {
+      "types": "./dist/config/addresses.d.ts",
+      "import": "./dist/config/addresses.js"
     }
   },
   "files": [

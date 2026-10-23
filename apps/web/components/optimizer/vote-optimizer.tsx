@@ -13,6 +13,7 @@ import { MarketStatus } from "../market-header"
 import { RecommendationView } from "./recommendation-view"
 import { StrategySelector, type Strategy } from "./strategy-selector"
 import { TokenCard } from "./token-card"
+import { VotePanel } from "./vote-panel"
 
 type View =
   | { readonly phase: "idle" }
@@ -67,6 +68,14 @@ export function VoteOptimizer() {
 
   useEffect(() => () => request.current?.abort(), [])
 
+  /** After a confirmed vote: re-read the NFT, its allocation and the market, bypassing every cache. Throws on failure. */
+  const refreshAfterVote = useCallback(async (target: NetworkName, tokenId: string) => {
+    const res = await fetch(`/api/optimize?network=${target}&tokenId=${encodeURIComponent(tokenId)}&fresh=1`, { cache: "no-store" })
+    const body = (await res.json()) as OptimizerResponse
+    if (!body.ok) throw new Error(body.error.message)
+    setView({ phase: "ready", network: target, tokenId, data: body.data, source: body.served.source })
+  }, [])
+
   const submit = () => {
     const id = input.trim().replace(/^#/, "")
     if (!TOKEN_PATTERN.test(id)) return
@@ -104,7 +113,7 @@ export function VoteOptimizer() {
           </h2>
           <p className="mt-3 max-w-[68ch] text-sm leading-relaxed text-fg-2">
             Enter a veMEZO token id. Boost Relay reads its voting power and current votes at one block, then proposes how BoostVoter.vote() could split
-            them across veBTC boost gauges. Recommendations are proposals only: nothing is signed or sent, and no wallet is needed.
+            them across veBTC boost gauges. A recommendation needs no wallet. On Mezo Testnet, the NFT's owner can then review and sign it with their own wallet.
           </p>
           <form
             className="mt-5 flex max-w-xl flex-col gap-2 sm:flex-row"
@@ -162,6 +171,7 @@ export function VoteOptimizer() {
             <TokenCard data={ready.data} />
             <StrategySelector value={strategy} onChange={setStrategy} data={ready.data} />
             <RecommendationView data={ready.data} strategy={strategy} />
+            <VotePanel data={ready.data} strategy={strategy} network={network} onRefresh={refreshAfterVote} />
           </>
         ) : null}
       </div>

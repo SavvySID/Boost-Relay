@@ -16,7 +16,7 @@ export function Methodology({ data }: { readonly data: MarketDto }) {
           Votes can be cast in this epoch until {utcDateTime(global.epoch.voteEnd)}. A position counts as active when its gauge is open and its veBTC lock
           still has voting power.
         </p>
-        <p>Read-only: Boost Relay does not connect a wallet and never signs or sends a transaction. It is an independent project, not affiliated with Mezo.</p>
+        <p>This dashboard only reads public contract data. Boost Relay never holds funds or keys; votes on Mezo Testnet are signed and sent by the NFT owner&apos;s own wallet. It is an independent project, not affiliated with Mezo.</p>
       </div>
     </footer>
   )

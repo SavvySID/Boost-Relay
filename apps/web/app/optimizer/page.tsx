@@ -4,7 +4,7 @@ import { VoteOptimizer } from "@/components/optimizer/vote-optimizer"
 
 export const metadata: Metadata = {
   title: "Vote Optimizer | Boost Relay",
-  description: "Read-only veMEZO vote recommendations computed with BoostVoter's exact vote() and boost math.",
+  description: "veMEZO vote recommendations computed with BoostVoter's exact vote() and boost math, with owner-signed voting on Mezo Testnet.",
 }
 
 export default function OptimizerPage() {

@@ -3,7 +3,7 @@ import { integer, relativeAge, utcDateTime } from "@/lib/market-formatting"
 import { ui } from "@/lib/ui"
 import { NetworkSelector } from "./network-selector"
 
-/** Top-bar actions shared by every page: network, read-only status, data freshness, refresh. */
+/** Top-bar actions shared by every page: network, mainnet read-only status, data freshness, refresh. */
 export function MarketStatus(props: {
   readonly network: NetworkName
   readonly onNetworkChange: (n: NetworkName) => void
@@ -19,16 +19,18 @@ export function MarketStatus(props: {
   return (
     <>
       <NetworkSelector value={props.network} onChange={props.onNetworkChange} />
-      <span
-        className="inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs font-medium text-fg-2"
-        title="No wallet is connected. Boost Relay only reads public contract data."
-      >
-        <svg viewBox="0 0 16 16" aria-hidden="true" className="size-3.5">
-          <path d="M2 8s2.2-4 6-4 6 4 6 4-2.2 4-6 4-6-4-6-4Z" fill="none" stroke="currentColor" strokeWidth="1.4" />
-          <circle cx="8" cy="8" r="1.8" fill="currentColor" />
-        </svg>
-        Read-only
-      </span>
+      {props.network === "mainnet" ? (
+        <span
+          className="inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs font-medium text-fg-2"
+          title="Mezo Mainnet is read-only during the testnet beta: Boost Relay only reads public contract data here."
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true" className="size-3.5">
+            <path d="M2 8s2.2-4 6-4 6 4 6 4-2.2 4-6 4-6-4-6-4Z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+            <circle cx="8" cy="8" r="1.8" fill="currentColor" />
+          </svg>
+          Read-only
+        </span>
+      ) : null}
       <div className="min-w-[9.5rem] text-right text-xs leading-tight" aria-live="polite">
         {block ? (
           <>

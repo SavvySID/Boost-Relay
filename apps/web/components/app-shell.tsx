@@ -6,6 +6,7 @@ import type { ReactNode } from "react"
 import type { NetworkName } from "@/lib/market-dto"
 import { chip } from "@/lib/ui"
 import { withNetwork } from "@/lib/use-network"
+import { WalletButton } from "./wallet/wallet-button"
 
 const NAV: readonly { readonly href: string; readonly label: string; readonly icon: ReactNode }[] = [
   {
@@ -97,7 +98,7 @@ export function AppShell(props: {
           </a>
         </div>
         <p className="mt-auto px-5 pb-5 text-xs leading-relaxed text-fg-3">
-          Read-only analytics built on public Mezo contracts. Independent project, not affiliated with or endorsed by Mezo.
+          Analytics built on public Mezo contracts. Votes are signed only by your own wallet. Independent project, not affiliated with or endorsed by Mezo.
         </p>
       </aside>
 
@@ -110,7 +111,10 @@ export function AppShell(props: {
               <NetworkBadge network={props.network} />
             </div>
             <p className="hidden text-sm text-fg-2 lg:block">{props.title}</p>
-            <div className="ml-auto flex flex-wrap items-center gap-2.5">{props.actions}</div>
+            <div className="ml-auto flex flex-wrap items-center gap-2.5">
+              {props.actions}
+              <WalletButton />
+            </div>
           </div>
           <nav aria-label="Boost Relay sections" className="flex gap-1 border-t border-line px-3 py-2 lg:hidden">
             {NAV.map((n) => (

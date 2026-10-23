@@ -8,6 +8,9 @@ export default defineConfig({
     // Web tests run against the package source, so they never depend on a stale dist build.
     alias: [
       { find: /^@boost-relay\/mezo\/formatting$/, replacement: src("./packages/mezo/src/formatting.ts") },
+      { find: /^@boost-relay\/mezo\/abis$/, replacement: src("./packages/mezo/src/abis/index.ts") },
+      { find: /^@boost-relay\/mezo\/chains$/, replacement: src("./packages/mezo/src/config/chains.ts") },
+      { find: /^@boost-relay\/mezo\/addresses$/, replacement: src("./packages/mezo/src/config/addresses.ts") },
       { find: /^@boost-relay\/mezo$/, replacement: src("./packages/mezo/src/index.ts") },
       { find: /^@boost-relay\/optimizer$/, replacement: src("./packages/optimizer/src/index.ts") },
       { find: /^@\/(.*)$/, replacement: src("./apps/web/$1") },

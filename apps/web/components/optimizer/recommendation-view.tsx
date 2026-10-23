@@ -46,7 +46,7 @@ function BoostChange({ from, to }: { readonly from: string; readonly to: string 
 }
 
 const STATUS = {
-  actionable: { tone: "success" as const, title: "Proposal ready", text: "Every check passed. This is a proposal: Boost Relay does not connect a wallet or send the vote." },
+  actionable: { tone: "success" as const, title: "Proposal ready", text: "Every check passed. This is a proposal; nothing is sent unless the NFT's owner reviews and signs it below (Mezo Testnet only)." },
   informational: { tone: "warn" as const, title: "For analysis only", text: "This NFT cannot vote right now, so the plan cannot be used as-is. It shows what a vote would do." },
   blocked: { tone: "danger" as const, title: "No recommendation", text: "A requirement for a trustworthy recommendation is missing." },
 }
