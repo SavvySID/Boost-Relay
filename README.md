@@ -6,9 +6,24 @@ This repository contains:
 
 - **`@boost-relay/mezo`**: the read-only data layer and exact boost math.
 - **`@boost-relay/optimizer`**: a pure, deterministic vote-allocation optimizer that mirrors `BoostVoter.vote()`.
-- **`apps/web`**: the **Boost Market** dashboard (`/`) and the **Vote Optimizer** (`/optimizer`), built with Next.js on both packages. On Mezo Testnet the optimizer can hand a recommendation to the NFT owner's own wallet to sign (testnet beta).
+- **`apps/web`**: the Boost Relay website, built with Next.js on both packages:
+  - the homepage (`/`);
+  - the **Boost Market** dashboard (`/market`);
+  - the **Vote Optimizer** (`/optimizer`), which on Mezo Testnet can hand a recommendation to the NFT owner's own wallet to sign (testnet beta);
+  - the **Vault Relay** research page (`/vault`).
 
 Mainnet is read-only.
+
+## Website
+
+| Route | What it is |
+|---|---|
+| `/` | Homepage: hero with a live chart of every active veBTC position's boost, the live market numbers, how boost allocation works, the products, how it works, a live product preview, principles, FAQ |
+| `/market` | Boost Market dashboard (`?network=testnet` for testnet). Old `/?network=…` links redirect here. |
+| `/optimizer` | Vote Optimizer and the testnet voting flow (`?network=testnet&token=<id>`) |
+| `/vault` | Vault Relay: the planned vault idea, its unresolved dependencies and a research roadmap. Not live; no deposits. |
+
+One top navigation bar covers every page, with a menu on small screens. App pages add the wallet control and keep the selected network in their links. The homepage's live sections share **one** request to `/api/market?network=mainnet`, so they reuse the server's snapshot cache. Every live number shows its block and age; a snapshot is labelled when it is partial or out of date, and shows "Unavailable" if it can't be read.
 
 ## Vote Optimizer
 
@@ -66,11 +81,11 @@ The visual system follows the public Mezo testnet app: white surfaces, `#E8E8E8`
 
 Mezo's typefaces (Riforma LL, GT Alpina) are commercially licensed, so Inter Tight and Geist Mono stand in for them. Boost Relay is an independent project, not affiliated with or endorsed by Mezo.
 
-## Run the dashboard
+## Run the site
 
 ```bash
 npm install
-npm run dev          # builds @boost-relay/mezo, then starts http://localhost:3000
+npm run dev          # builds the packages, then starts http://localhost:3000 (market at /market)
 # or, production:
 npm run build && npm start
 ```

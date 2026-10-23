@@ -39,18 +39,18 @@ export function WalletButton() {
   return (
     <div ref={root} className="relative">
       {connected ? (
-        <button key="account" type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu" className={ui.btnSecondary}>
+        <button key="account" type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu" className={`${ui.btnSecondary} whitespace-nowrap`}>
           <span aria-hidden="true" className={`size-2 rounded-full ${w.chainId === TESTNET_CHAIN_ID ? "bg-success-fg" : "bg-warn-fg"}`} />
           <span className="num">{short(w.account ?? "")}</span>
         </button>
       ) : (
-        <button key="connect" type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="dialog" disabled={w.status === "connecting"} className={ui.btnPrimary}>
+        <button key="connect" type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="dialog" disabled={w.status === "connecting"} className={`${ui.btnPrimary} whitespace-nowrap`}>
           {w.status === "connecting" ? "Check your wallet…" : "Connect wallet"}
         </button>
       )}
 
       {open ? (
-        <div role={connected ? "menu" : "dialog"} aria-label={connected ? "Wallet" : "Connect a wallet"} className="absolute right-0 top-full z-50 mt-2 w-72 rounded-[var(--radius-lg)] border border-line bg-surface p-3 shadow-[var(--shadow-raise)]">
+        <div role={connected ? "menu" : "dialog"} aria-label={connected ? "Wallet" : "Connect a wallet"} className="absolute right-0 top-full z-50 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-[var(--radius-lg)] border border-line bg-surface p-3 shadow-[var(--shadow-raise)]">
           {connected ? (
             <div className="grid gap-3 p-1 text-sm">
               <div>
@@ -101,7 +101,7 @@ export function WalletButton() {
         </div>
       ) : null}
       {w.error !== null && !open ? (
-        <p role="alert" className="absolute right-0 top-full z-40 mt-2 w-72 rounded-[var(--radius-md)] bg-danger-bg px-3 py-2 text-xs text-danger-fg">
+        <p role="alert" className="absolute right-0 top-full z-40 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-[var(--radius-md)] bg-danger-bg px-3 py-2 text-xs text-danger-fg">
           {w.error}{" "}
           <button type="button" onClick={w.clearError} className="underline">
             Dismiss

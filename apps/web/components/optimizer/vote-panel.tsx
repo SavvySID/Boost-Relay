@@ -5,6 +5,7 @@ import type { NetworkName } from "@/lib/market-dto"
 import { amount, boost, integer, relativeAge, short, utcDateTime } from "@/lib/market-formatting"
 import type { OptimizerDto } from "@/lib/optimizer-dto"
 import { chip, ui } from "@/lib/ui"
+import { ACKNOWLEDGEMENTS } from "@/lib/vote-copy"
 import type { PreparedVote, VoteGate } from "@/lib/vote-dto"
 import { TESTNET_CHAIN_ID } from "@/lib/wallet/actions"
 import { httpVoteApi, invalidationReason, prepareVote, preflight, submitVote, type FlowState, type VoteApi } from "@/lib/wallet/vote-flow"
@@ -45,14 +46,6 @@ function Gates({ gates }: { readonly gates: readonly VoteGate[] }) {
     </ul>
   )
 }
-
-const ACKNOWLEDGEMENTS = [
-  "This records veMEZO's vote in BoostVoter for the current epoch.",
-  "Any existing boost votes of this NFT are removed and replaced by this allocation (BoostVoter resets them first).",
-  "BoostVoter allows one vote per NFT per epoch; it cannot be changed again until the next epoch.",
-  "Live boost changes when the vote lands, but the boost applied to each veBTC updates only after someone calls the permissionless pokeBoost. Boost Relay does not poke.",
-  "You are signing a blockchain transaction with your own wallet and will pay network gas in BTC.",
-] as const
 
 function TxLink({ explorerUrl, hash }: { readonly explorerUrl: string; readonly hash: string }) {
   return (

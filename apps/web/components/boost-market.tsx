@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { MarketDto, MarketResponse, MarketServed, NetworkName } from "@/lib/market-dto"
 import { useNetwork } from "@/lib/use-network"
+import { useNow } from "@/lib/use-now"
 import { AppShell } from "./app-shell"
 import { BoostDistribution } from "./boost-distribution"
 import { ErrorState } from "./error-state"
@@ -27,16 +28,6 @@ type View =
       /** Set when a refresh failed; the previous snapshot stays on screen. */
       readonly refreshError: string | null
     }
-
-/** Re-renders relative times; never fetches. */
-export function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), intervalMs)
-    return () => window.clearInterval(id)
-  }, [intervalMs])
-  return now
-}
 
 export function BoostMarket() {
   const [network, setNetwork] = useNetwork()
