@@ -22,6 +22,7 @@ import type {
   MarketSnapshot,
   ReadFailure,
   VeMezoPosition,
+  VeMezoVoteAllocation,
 } from "./types.js"
 
 export class ChainMismatchError extends Error {
@@ -147,7 +148,15 @@ export interface MezoReader {
   readMarketSnapshot(options?: SnapshotOptions): Promise<SnapshotResult>
   readVeMezoTokenIds(owner: Address, blockNumber?: bigint): Promise<bigint[]>
   readVeMezoPosition(tokenId: bigint, blockNumber?: bigint): Promise<VeMezoPosition>
+  /** This NFT's existing BoostVoter votes, with a completeness proof against usedWeights. */
+  readVeMezoVoteAllocation(tokenId: bigint, blockNumber?: bigint): Promise<VeMezoVoteAllocation>
 }
+
+/**
+ * gaugeVote has no length getter. vote() caps its length at maxVotingNum when it is written, but the
+ * governor may lower maxVotingNum later, so the reader probes this many indexes past the current cap.
+ */
+export const ALLOCATION_PROBE_MARGIN = 16
 
 // ---------- value guards (decoded values are `unknown` until checked) ----------
 
@@ -601,11 +610,66 @@ export function createMezoReader(options: MezoReaderOptions): MezoReader {
     }
   }
 
+  async function readVeMezoVoteAllocation(tokenId: bigint, blockNumber?: bigint): Promise<VeMezoVoteAllocation> {
+    const block = await chainAccess.getBlock(blockNumber)
+    const k = `veMezoVotes:${tokenId}`
+    const head = await run(
+      [
+        call(`${k}:used`, contracts.boostVoter, boostVoterAbi, "usedWeights", [tokenId]),
+        call(`${k}:max`, contracts.boostVoter, boostVoterAbi, "maxVotingNum"),
+      ],
+      block,
+      lightChunkSize,
+    )
+    const usedWeight = head.get(`${k}:used`, asBigInt)
+    const maxVotingNum = head.get(`${k}:max`, asBigInt)
+    if (usedWeight === undefined || maxVotingNum === undefined) throw new GlobalStateReadError(head.failures)
+
+    const probe = Number(maxVotingNum) + ALLOCATION_PROBE_MARGIN
+    const indexCalls: ContractCall[] = []
+    for (let i = 0; i < probe; i++) indexCalls.push(call(`${k}:gauge:${i}`, contracts.boostVoter, boostVoterAbi, "gaugeVote", [tokenId, BigInt(i)]))
+    const indexes = await run(indexCalls, block, lightChunkSize)
+    const issues: string[] = []
+    const gauges: Address[] = []
+    let ended = false
+    for (let i = 0; i < probe; i++) {
+      const key = `${k}:gauge:${i}`
+      const failure = indexes.failures.find((f) => f.key === key)
+      if (failure === undefined) {
+        const gauge = indexes.get(key, asAddress)
+        if (gauge === undefined) issues.push(`gaugeVote[${i}] could not be decoded`)
+        else if (ended) issues.push(`gaugeVote[${i}] returned a value after the array ended`)
+        else gauges.push(gauge)
+      } else if (failure.kind === "reverted") {
+        ended = true // out-of-bounds read of a public array reverts: this is the array's end
+      } else {
+        issues.push(`gaugeVote[${i}] read failed (${failure.kind}: ${failure.message})`)
+      }
+    }
+    if (!ended) issues.push(`gaugeVote has more than ${probe} entries; allocation not fully read`)
+
+    const voteRead = await run(
+      gauges.map((g) => call(`${k}:votes:${g}`, contracts.boostVoter, boostVoterAbi, "votes", [tokenId, g])),
+      block,
+      lightChunkSize,
+    )
+    const entries: { gauge: Address; votes: bigint }[] = []
+    for (const g of gauges) {
+      const v = voteRead.get(`${k}:votes:${g}`, asBigInt)
+      if (v === undefined) issues.push(`votes(${tokenId}, ${g}) read failed`)
+      else entries.push({ gauge: g, votes: v })
+    }
+    const sum = entries.reduce((s, e) => s + e.votes, 0n)
+    if (issues.length === 0 && sum !== usedWeight) issues.push(`sum of votes (${sum}) does not equal usedWeights (${usedWeight})`)
+    return { tokenId, blockNumber: block.number, usedWeight, entries, complete: issues.length === 0, issues }
+  }
+
   return {
     network,
     deployment,
     rpcUrl,
     assertChainId,
+    readVeMezoVoteAllocation,
     getBlock: (blockNumber) => chainAccess.getBlock(blockNumber),
     readGlobalState,
     scanGaugeMappings,

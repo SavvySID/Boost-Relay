@@ -51,6 +51,7 @@ export {
 export { HOUR, WEEK, canVoteAt, epochNext, epochStart, epochVoteEnd, epochVoteStart, getEpochInfo, type EpochInfo, type EpochPhase } from "./epoch.js"
 
 export {
+  ALLOCATION_PROBE_MARGIN,
   ChainMismatchError,
   GlobalStateReadError,
   NotFoundError,
@@ -99,4 +100,5 @@ export type {
   ReadFailure,
   SnapshotMeta,
   VeMezoPosition,
+  VeMezoVoteAllocation,
 } from "./types.js"

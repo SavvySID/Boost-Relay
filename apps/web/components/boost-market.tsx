@@ -1,13 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { MarketDto, MarketResponse, MarketServed, NetworkName } from "@/lib/market-dto"
+import { useNetwork } from "@/lib/use-network"
 import { AppShell } from "./app-shell"
 import { BoostDistribution } from "./boost-distribution"
 import { ErrorState } from "./error-state"
 import { IncentivePanel } from "./incentive-panel"
 import { LoadingState } from "./loading-state"
-import { MarketHeader } from "./market-header"
+import { MarketStatus } from "./market-header"
 import { MarketPositions } from "./market-positions"
 import { MarketSummary, MetricsLedger } from "./market-summary"
 import { Methodology } from "./methodology"
@@ -28,7 +29,7 @@ type View =
     }
 
 /** Re-renders relative times; never fetches. */
-function useNow(intervalMs: number): number {
+export function useNow(intervalMs: number): number {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), intervalMs)
@@ -38,8 +39,8 @@ function useNow(intervalMs: number): number {
 }
 
 export function BoostMarket() {
-  const [network, setNetwork] = useState<NetworkName>("mainnet")
-  const [view, setView] = useState<View>({ phase: "loading", network: "mainnet" })
+  const [network, setNetwork] = useNetwork()
+  const [view, setView] = useState<View>({ phase: "loading", network })
   const request = useRef<{ controller: AbortController; network: NetworkName } | null>(null)
   const now = useNow(15_000)
 
@@ -51,18 +52,11 @@ export function BoostMarket() {
     }
     const controller = new AbortController()
     request.current = { controller, network: target }
-    setView((v) =>
-      refresh && v.phase === "ready" && v.network === target
-        ? { ...v, refreshing: true, refreshError: null }
-        : { phase: "loading", network: target },
-    )
+    setView((v) => (refresh && v.phase === "ready" && v.network === target ? { ...v, refreshing: true, refreshError: null } : { phase: "loading", network: target }))
     let message: string | null = null
     let result: { data: MarketDto; served: MarketServed } | null = null
     try {
-      const response = await fetch(`/api/market?network=${target}${refresh ? "&refresh=1" : ""}`, {
-        signal: controller.signal,
-        cache: "no-store",
-      })
+      const response = await fetch(`/api/market?network=${target}${refresh ? "&refresh=1" : ""}`, { signal: controller.signal, cache: "no-store" })
       const body = (await response.json()) as MarketResponse
       if (!body.ok) message = body.error.message
       else if (body.data.meta.network !== target) message = "The server returned data for a different network. Nothing was shown."
@@ -97,38 +91,46 @@ export function BoostMarket() {
   const ready = view.phase === "ready" && view.network === network ? view : null
   const busy = view.phase === "loading" || (ready?.refreshing ?? false)
 
-  const header = (
-    <MarketHeader
-      network={network}
-      onNetworkChange={setNetwork}
-      snapshot={ready ? { data: ready.data, served: ready.served } : null}
-      busy={busy}
-      onRefresh={() => void load(network, true)}
-      now={now}
-    />
-  )
-
-  const body = useMemo(() => {
-    if (view.phase === "loading" || view.network !== network) return <LoadingState network={network} />
-    if (view.phase === "error") return <ErrorState network={network} message={view.message} onRetry={() => void load(network, false)} />
+  let body
+  if (view.phase === "loading" || view.network !== network) body = <LoadingState network={network} />
+  else if (view.phase === "error") body = <ErrorState network={network} message={view.message} onRetry={() => void load(network, false)} />
+  else {
     const { data, served } = view
-    return (
-      <>
+    body = (
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
         <SnapshotNotices data={data} served={served} refreshError={view.refreshError} />
-        <section aria-labelledby="overview-title" className="grid gap-8 py-8 lg:py-10">
+        <section aria-labelledby="overview-title" className="grid grid-cols-[minmax(0,1fr)] gap-6 rounded-[var(--radius-lg)] bg-warm p-5 sm:p-8">
           <MarketSummary data={data} />
           <VoteAllocation data={data} />
         </section>
-        <section className="grid gap-6 border-t border-line py-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-10">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
           <MetricsLedger data={data} />
           <BoostDistribution data={data} />
-        </section>
+        </div>
         <MarketPositions key={`${data.meta.network}:${data.meta.blockNumber}`} data={data} />
         <IncentivePanel data={data} />
         <Methodology data={data} />
-      </>
+      </div>
     )
-  }, [view, network, load])
+  }
 
-  return <AppShell header={header}>{body}</AppShell>
+  return (
+    <AppShell
+      network={network}
+      title="Boost Market"
+      actions={
+        <MarketStatus
+          network={network}
+          onNetworkChange={setNetwork}
+          block={ready ? { number: ready.data.meta.blockNumber, timestamp: ready.data.meta.blockTimestamp } : null}
+          busy={busy}
+          busyLabel={ready ? "Refreshing…" : "Reading chain…"}
+          onRefresh={() => void load(network, true)}
+          now={now}
+        />
+      }
+    >
+      {body}
+    </AppShell>
+  )
 }

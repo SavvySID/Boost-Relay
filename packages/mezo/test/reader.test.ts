@@ -49,6 +49,8 @@ class FakeMezo {
   veBtc = new Map<bigint, { power: bigint; lock: Lock; owner: Address }>()
   bribes = new Map<Address, { tokens: Address[]; posted: Map<Address, bigint> }>()
   veMezo = new Map<bigint, { owner: Address; lock: Lock; power: bigint; voted: boolean; lastVoted: bigint; used: bigint }>()
+  allocations = new Map<bigint, { gauge: Address; votes: bigint }[]>()
+  usedOverride = new Map<bigint, bigint>()
   failures = new Map<string, Omit<CallResult & { ok: false }, "key">>()
   log: { key: string; blockNumber: bigint; chunkSize: number }[] = []
 
@@ -124,8 +126,17 @@ class FakeMezo {
           return gauge?.bribe ?? zeroAddress
         case "lastVoted":
           return this.veMezo.get(id)?.lastVoted ?? 0n
-        case "usedWeights":
-          return this.veMezo.get(id)?.used ?? 0n
+        case "usedWeights": {
+          const list = this.allocations.get(id)
+          return this.usedOverride.get(id) ?? (list ? list.reduce((t, e) => t + e.votes, 0n) : (this.veMezo.get(id)?.used ?? 0n))
+        }
+        case "gaugeVote": {
+          const entry = (this.allocations.get(id) ?? [])[Number(a[1] as bigint)]
+          if (entry === undefined) throw new Error("array index out of bounds")
+          return entry.gauge
+        }
+        case "votes":
+          return (this.allocations.get(id) ?? []).find((e) => same(e.gauge, a[1] as string))?.votes ?? 0n
         case "getBoost": {
           const g = this.mapping.get(id)
           return computeBoost({
@@ -455,5 +466,51 @@ describe("createMulticallExecutor", () => {
     const exec = createMulticallExecutor(t)
     await expect(exec.execute([callFor(1), callFor(1)], { blockNumber: 1n, chunkSize: 2 })).rejects.toThrow(/duplicate/)
     await expect(exec.execute([callFor(1)], { blockNumber: 1n, chunkSize: 0 })).rejects.toThrow(RangeError)
+  })
+})
+
+describe("readVeMezoVoteAllocation", () => {
+  const G = (n: number): Address => fakeAddress(0x1000 + n)
+
+  it("reads every prior vote and proves completeness against usedWeights", async () => {
+    fake.allocations.set(924n, [
+      { gauge: G(1), votes: tokens(60n) },
+      { gauge: G(3), votes: tokens(30n) },
+    ])
+    const a = await makeReader(fake).readVeMezoVoteAllocation(924n)
+    expect(a).toMatchObject({ tokenId: 924n, usedWeight: tokens(90n), complete: true, issues: [] })
+    expect(a.entries).toEqual([
+      { gauge: G(1), votes: tokens(60n) },
+      { gauge: G(3), votes: tokens(30n) },
+    ])
+    expect(new Set(fake.log.filter((l) => l.key.startsWith("veMezoVotes:")).map((l) => l.blockNumber))).toEqual(new Set([BLOCK]))
+  })
+
+  it("returns an empty, complete allocation for an NFT that never voted", async () => {
+    const a = await makeReader(fake).readVeMezoVoteAllocation(925n)
+    expect(a).toMatchObject({ usedWeight: 0n, entries: [], complete: true })
+  })
+
+  it("is incomplete when the entries do not add up to usedWeights", async () => {
+    fake.allocations.set(924n, [{ gauge: G(1), votes: tokens(60n) }])
+    fake.usedOverride.set(924n, tokens(61n))
+    const a = await makeReader(fake).readVeMezoVoteAllocation(924n)
+    expect(a.complete).toBe(false)
+    expect(a.issues.join(" ")).toMatch(/does not equal usedWeights/)
+  })
+
+  it("is incomplete when an index read fails at the RPC level", async () => {
+    fake.allocations.set(924n, [{ gauge: G(1), votes: tokens(60n) }])
+    fake.failures.set("veMezoVotes:924:gauge:0", { ok: false, kind: "rpc", error: "timeout" })
+    const a = await makeReader(fake).readVeMezoVoteAllocation(924n)
+    expect(a.complete).toBe(false)
+    expect(a.issues[0]).toMatch(/gaugeVote\[0\] read failed/)
+  })
+
+  it("is incomplete when the array is longer than the probe window", async () => {
+    fake.allocations.set(924n, Array.from({ length: 50 }, (_, i) => ({ gauge: fakeAddress(0x5000 + i), votes: 1n })))
+    const a = await makeReader(fake).readVeMezoVoteAllocation(924n)
+    expect(a.complete).toBe(false)
+    expect(a.issues.join(" ")).toMatch(/more than 46 entries/)
   })
 })

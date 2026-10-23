@@ -1,28 +1,18 @@
 import type { PositionDto, PositionStatus, TargetDto } from "@/lib/market-dto"
 import { amount, boost, compact, utcDate } from "@/lib/market-formatting"
+import { chip, type ChipTone } from "@/lib/ui"
 
-const STATUS: Record<PositionStatus, { readonly label: string; readonly active: boolean }> = {
-  active: { label: "Active", active: true },
-  expired: { label: "Expired", active: false },
-  "no-power": { label: "No power", active: false },
-  "no-lock": { label: "No lock", active: false },
-  "gauge-killed": { label: "Gauge closed", active: false },
+const STATUS: Record<PositionStatus, { readonly label: string; readonly tone: ChipTone }> = {
+  active: { label: "Active", tone: "success" },
+  expired: { label: "Expired", tone: "neutral" },
+  "no-power": { label: "No power", tone: "neutral" },
+  "no-lock": { label: "No lock", tone: "neutral" },
+  "gauge-killed": { label: "Gauge closed", tone: "neutral" },
 }
 
 export function StatusLabel({ status }: { readonly status: PositionStatus }) {
   const s = STATUS[status]
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-sm ${s.active ? "text-fg" : "text-fg-3"}`}>
-      <svg viewBox="0 0 10 10" aria-hidden="true" className="size-2.5">
-        {s.active ? (
-          <circle cx="5" cy="5" r="4" fill="var(--color-btc)" />
-        ) : (
-          <circle cx="5" cy="5" r="3.4" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        )}
-      </svg>
-      {s.label}
-    </span>
-  )
+  return <span className={chip(s.tone)}>{s.label}</span>
 }
 
 /** Live boost with a thin 1x-5x meter. */
@@ -32,7 +22,7 @@ export function BoostValue({ value }: { readonly value: string }) {
   return (
     <span className="inline-flex items-center gap-2">
       <span className="num w-12 text-right">{boost(value)}</span>
-      <span aria-hidden="true" className="relative h-1 w-10 overflow-hidden rounded-full bg-ink-800">
+      <span aria-hidden="true" className="relative h-1 w-10 overflow-hidden rounded-full bg-fill">
         <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.max(0, Math.min(100, fill))}%`, background: "var(--color-viz-boost)" }} />
       </span>
     </span>

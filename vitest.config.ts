@@ -9,6 +9,7 @@ export default defineConfig({
     alias: [
       { find: /^@boost-relay\/mezo\/formatting$/, replacement: src("./packages/mezo/src/formatting.ts") },
       { find: /^@boost-relay\/mezo$/, replacement: src("./packages/mezo/src/index.ts") },
+      { find: /^@boost-relay\/optimizer$/, replacement: src("./packages/optimizer/src/index.ts") },
       { find: /^@\/(.*)$/, replacement: src("./apps/web/$1") },
     ],
   },

@@ -5,22 +5,16 @@ const OPTIONS: readonly { readonly id: NetworkName; readonly label: string }[] =
   { id: "testnet", label: "Testnet" },
 ]
 
+/** Mezo-style segmented control: gray pill track, white raised thumb. */
 export function NetworkSelector({ value, onChange }: { readonly value: NetworkName; readonly onChange: (n: NetworkName) => void }) {
   return (
     <fieldset className="shrink-0">
       <legend className="sr-only">Mezo network</legend>
-      <div className="inline-flex rounded-lg border border-line bg-ink-900 p-0.5">
+      <div className="inline-flex rounded-full bg-fill p-1">
         {OPTIONS.map((o) => (
           <label key={o.id} className="relative cursor-pointer">
-            <input
-              type="radio"
-              name="network"
-              value={o.id}
-              checked={value === o.id}
-              onChange={() => onChange(o.id)}
-              className="peer sr-only"
-            />
-            <span className="block rounded-md px-3 py-1.5 text-sm text-fg-2 transition-colors peer-checked:bg-ink-800 peer-checked:text-fg peer-focus-visible:outline-2 peer-focus-visible:outline-btc hover:text-fg">
+            <input type="radio" name="network" value={o.id} checked={value === o.id} onChange={() => onChange(o.id)} className="peer sr-only" />
+            <span className="block rounded-full px-3.5 py-1.5 text-sm font-medium text-fg-2 transition-colors peer-checked:bg-surface peer-checked:text-fg peer-checked:shadow-[var(--shadow-raise)] peer-focus-visible:outline-2 peer-focus-visible:outline-accent hover:text-fg">
               Mezo {o.label}
             </span>
           </label>

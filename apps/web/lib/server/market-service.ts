@@ -3,6 +3,7 @@ import {
   GlobalStateReadError,
   createMezoReader,
   type GaugeMappingCache,
+  type MarketSnapshot,
   type MezoReader,
   type NetworkName,
 } from "@boost-relay/mezo"
@@ -14,7 +15,9 @@ export const SNAPSHOT_TTL_MS = 60_000
 /** Even an explicit refresh re-serves a snapshot younger than this, to protect the public RPC. */
 export const MIN_REFRESH_INTERVAL_MS = 15_000
 
-interface Entry {
+export interface Entry {
+  /** The verified snapshot itself (bigint values), for server-side computation such as the optimizer. */
+  readonly snapshot: MarketSnapshot
   readonly dto: MarketDto
   readonly cachedAt: number
   readonly durationMs: number
@@ -37,7 +40,7 @@ const state: ServiceState = (holder[globalKey] ??= {
   mappings: new Map(),
 })
 
-function readerFor(network: NetworkName): MezoReader {
+export function readerFor(network: NetworkName): MezoReader {
   let reader = state.readers.get(network)
   if (reader === undefined) {
     // RPC overrides come from MEZO_MAINNET_RPC_URL / MEZO_TESTNET_RPC_URL; never sent to the client.
@@ -56,7 +59,7 @@ async function load(network: NetworkName): Promise<Entry> {
   })
   if (cache !== null) state.mappings.set(network, cache)
   else state.mappings.delete(network)
-  const entry: Entry = { dto: toMarketDto(snapshot), cachedAt: Date.now(), durationMs: Date.now() - started }
+  const entry: Entry = { snapshot, dto: toMarketDto(snapshot), cachedAt: Date.now(), durationMs: Date.now() - started }
   state.snapshots.set(network, entry)
   return entry
 }

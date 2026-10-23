@@ -5,9 +5,33 @@ Non-custodial analytics for Mezo Earn's boost market: which veBTC positions are 
 This repository contains:
 
 - **`@boost-relay/mezo`**: the read-only data layer and exact boost math.
-- **`apps/web`**: the **Boost Market** dashboard (Next.js), a read-only view of live Mezo mainnet and testnet data built on that package.
+- **`@boost-relay/optimizer`**: a pure, deterministic vote-allocation optimizer that mirrors `BoostVoter.vote()`.
+- **`apps/web`**: the **Boost Market** dashboard (`/`) and the **Vote Optimizer** (`/optimizer`), built with Next.js on both packages.
 
-The vote optimizer and wallet-signed voting come next.
+Wallet-signed voting comes in a later phase. Today nothing is signed or sent.
+
+## Vote Optimizer
+
+Enter a veMEZO token id at `/optimizer?network=testnet`. The server then:
+
+1. Reads, at the same block as the market snapshot, the NFT's voting power, lock, `lastVoted`, and every existing BoostVoter vote. It proves the allocation is complete by checking that `sum(votes) == usedWeights`.
+2. Runs two strategies (both deterministic, with ties broken by the lower veBTC id):
+   - **Maximize boost improvement.** Fills the largest gaps to 5x first. This is optimal for the gain in boosted veBTC power (unboosted power x boost) under the gauge limit, up to rounding.
+   - **Maximize positions at 5x.** Fills the cheapest gaps first. This is optimal for the count of positions reaching 5x.
+3. Mirrors `vote()` exactly:
+   - weights are relative;
+   - each gauge gets `floor(weight x power / sum)`;
+   - the NFT's prior votes are removed first;
+   - at most `maxVotingNum` gauges, with no duplicates.
+4. Validates the result and returns a proposed `vote()` call, encoded with the verified ABI, for display only.
+
+A partial snapshot, an unreadable allocation, or zero power blocks the recommendation. An NFT that already voted this epoch, or is outside the voting window, gets an informational result only.
+
+## Design
+
+The visual system follows the public Mezo testnet app: white surfaces, `#E8E8E8` lines and fills, black pill actions, segmented controls, 8/12/16px radii, and Mezo red `#FF004D` as a sparing accent. Tokens live in `apps/web/app/globals.css` and component recipes in `apps/web/lib/ui.ts`.
+
+Mezo's typefaces (Riforma LL, GT Alpina) are commercially licensed, so Inter Tight and Geist Mono stand in for them. Boost Relay is an independent project, not affiliated with or endorsed by Mezo.
 
 ## Run the dashboard
 

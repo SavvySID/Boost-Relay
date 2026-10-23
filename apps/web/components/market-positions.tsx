@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react"
 import type { MarketDto } from "@/lib/market-dto"
 import { integer } from "@/lib/market-formatting"
 import { filterCounts, viewPositions, type PositionFilter, type SortDirection, type SortKey } from "@/lib/market-view"
+import { ui } from "@/lib/ui"
 import { MarketFilters } from "./market-filters"
 import { MarketTable } from "./market-table"
 import { PositionDetail } from "./position-detail"
@@ -20,17 +21,14 @@ export function MarketPositions({ data }: { readonly data: MarketDto }) {
   const returnFocus = useRef<HTMLElement | null>(null)
 
   const counts = useMemo(() => filterCounts(data.positions), [data.positions])
-  const rows = useMemo(
-    () => viewPositions(data.positions, { filter, query, sortKey, sortDirection }),
-    [data.positions, filter, query, sortKey, sortDirection],
-  )
+  const rows = useMemo(() => viewPositions(data.positions, { filter, query, sortKey, sortDirection }), [data.positions, filter, query, sortKey, sortDirection])
   const visible = rows.slice(0, limit)
   const selectedPosition = selected === null ? null : (data.positions.find((p) => p.tokenId === selected) ?? null)
 
   return (
-    <section id="positions" aria-labelledby="positions-title" className="scroll-mt-24 border-t border-line py-8">
+    <section id="positions" aria-labelledby="positions-title" className={`scroll-mt-24 ${ui.card} ${ui.cardBody}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 id="positions-title" className="font-condensed text-xl font-medium">
+        <h3 id="positions-title" className={ui.sectionTitle}>
           Boost positions
         </h3>
         <p className="num text-xs text-fg-3" aria-live="polite">
@@ -58,10 +56,8 @@ export function MarketPositions({ data }: { readonly data: MarketDto }) {
       />
 
       {rows.length === 0 ? (
-        <div className="mt-6 rounded-lg border border-dashed border-line-strong px-6 py-10 text-center">
-          <p className="text-sm text-fg">
-            {query.trim() !== "" ? `No positions match "${query.trim()}" in this view.` : "No positions in this view at this block."}
-          </p>
+        <div className="mt-5 rounded-[var(--radius-md)] bg-subtle px-6 py-10 text-center">
+          <p className="text-sm text-fg">{query.trim() !== "" ? `No positions match "${query.trim()}" in this view.` : "No positions in this view at this block."}</p>
           {query.trim() !== "" || filter !== "all" ? (
             <button
               type="button"
@@ -69,7 +65,7 @@ export function MarketPositions({ data }: { readonly data: MarketDto }) {
                 setQuery("")
                 setFilter("all")
               }}
-              className="mt-3 rounded-md border border-line-strong px-3 py-1.5 text-sm text-fg hover:border-btc/60"
+              className={`mt-3 ${ui.btnSecondary}`}
             >
               Clear search and filters
             </button>
@@ -90,11 +86,7 @@ export function MarketPositions({ data }: { readonly data: MarketDto }) {
 
       {rows.length > visible.length ? (
         <div className="mt-4 flex justify-center">
-          <button
-            type="button"
-            onClick={() => setLimit(rows.length)}
-            className="rounded-lg border border-line-strong bg-ink-850 px-4 py-2 text-sm text-fg hover:border-btc/60"
-          >
+          <button type="button" onClick={() => setLimit(rows.length)} className={ui.btnSecondary}>
             Show all {integer(rows.length)} positions
           </button>
         </div>

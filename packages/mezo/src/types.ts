@@ -115,6 +115,27 @@ export interface MarketSnapshot {
   }
 }
 
+/**
+ * A veMEZO NFT's current BoostVoter allocation, read at one block.
+ *
+ * BoostVoter keeps `gaugeVote[tokenId]` (gauges this NFT voted for) and `votes[tokenId][gauge]`
+ * (absolute weight on each). The next vote() first resets all of these (NonStakingVoter._vote calls
+ * _reset), so an optimizer must subtract them from current gauge weights.
+ */
+export interface VeMezoVoteAllocation {
+  readonly tokenId: bigint
+  readonly blockNumber: bigint
+  /** BoostVoter.usedWeights(tokenId): sum of this NFT's votes across gauges. */
+  readonly usedWeight: bigint
+  readonly entries: readonly { readonly gauge: Address; readonly votes: bigint }[]
+  /**
+   * True only if the gaugeVote array was read to its end and sum(entries.votes) == usedWeight.
+   * When false, the allocation must not be used for an actionable recommendation.
+   */
+  readonly complete: boolean
+  readonly issues: readonly string[]
+}
+
 /** A veMEZO NFT as read for a wallet (voting side). */
 export interface VeMezoPosition {
   readonly tokenId: bigint

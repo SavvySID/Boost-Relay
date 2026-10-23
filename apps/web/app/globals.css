@@ -1,53 +1,80 @@
 @import "tailwindcss";
 
+/*
+ * Boost Relay design tokens, derived from the public Mezo testnet app (testnet.mezo.org/home and
+ * /borrow, inspected 2026-10-23 via computed styles). Values marked "observed" were read from Mezo's
+ * own CSS; the rest are Boost Relay choices built on them. Mezo's typefaces (Riforma LL, GT Alpina)
+ * are commercially licensed, so open-licensed substitutes are used (see app/layout.tsx).
+ */
 @theme {
-  /* Slate base: cool, slightly blue, never neutral black. */
-  --color-ink-950: #14181f;
-  --color-ink-900: #1a1f28;
-  --color-ink-850: #202633;
-  --color-ink-800: #262d3a;
-  --color-line: #2b3240;
-  --color-line-strong: #3a4354;
+  /* Surfaces */
+  --color-page: #ffffff; /* observed: body background */
+  --color-surface: #ffffff; /* cards */
+  --color-subtle: #fafafa; /* table headers, quiet wells */
+  --color-fill: #e8e8e8; /* observed: active nav item, segmented track, secondary buttons */
+  --color-fill-hover: #dedede;
+  --color-warm: #f4f0ed; /* observed: Mezo marketing off-white, used for the insight panel */
 
-  --color-fg: #eceef2;
-  --color-fg-2: #a9b1be;
-  --color-fg-3: #858e9d;
+  /* Lines */
+  --color-line: #e8e8e8; /* observed: 1px card and header borders */
+  --color-line-strong: #d0d0d0;
 
-  /* Brand accent: Bitcoin orange, used for actions and focus only. */
-  --color-btc: #f7931a;
-  --color-btc-deep: #c56f07;
+  /* Text */
+  --color-fg: #000000; /* observed: primary text and values */
+  --color-fg-body: #171717; /* observed: :root --foreground */
+  --color-fg-2: #4b4b4b; /* observed: secondary text rgb(75,75,75) */
+  --color-fg-3: #5e5e5e; /* observed: muted text rgb(94,94,94); 6.4:1 on white */
 
-  /* Chart roles, validated for the #1a1f28 surface (lightness band, chroma, CVD, contrast). */
-  --color-viz-boost: #d9790e;
-  --color-viz-over: #8f80e6;
-  --color-viz-idle: #199e88;
+  /* Actions */
+  --color-primary: #000000; /* observed: primary buttons are black pills */
+  --color-primary-hover: #262626;
+  --color-on-primary: #ffffff;
+  --color-accent: #ff004d; /* observed: Mezo brand red (logo, marketing headings) */
 
-  /* Status (always paired with an icon and a label). */
-  --color-warn: #e8b931;
-  --color-bad: #f07070;
+  /* Status chips (observed pairs from Mezo's app and marketing site) */
+  --color-success-fg: #166c3b;
+  --color-success-bg: #eaf6ed;
+  --color-info-fg: #014a7a;
+  --color-info-bg: #e1f3ff;
+  --color-warn-fg: #944500;
+  --color-warn-bg: #f8ecd4;
+  --color-danger-fg: #6b0036;
+  --color-danger-bg: #fae2df;
 
-  --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
-  --font-condensed: var(--font-plex-condensed), var(--font-plex), ui-sans-serif, sans-serif;
+  /* Chart roles, validated on #ffffff (lightness band, chroma, CVD separation, contrast). */
+  --color-viz-boost: #ff004d;
+  --color-viz-over: #6250d6;
+  --color-viz-idle: #a86200;
+
+  /* Shape */
+  --radius-sm: 8px; /* observed: nav items, small controls */
+  --radius-md: 12px; /* observed: large buttons, inputs */
+  --radius-lg: 16px; /* observed: cards */
+  --shadow-raise: 0 1px 4px 0 rgb(0 0 0 / 0.12); /* observed: segmented-control thumb */
+
+  --font-sans: var(--font-ui), system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: var(--font-code), ui-monospace, monospace;
 }
 
 @layer base {
   html {
-    color-scheme: dark;
-    background: var(--color-ink-950);
+    color-scheme: light;
+    background: var(--color-page);
   }
   body {
-    background: var(--color-ink-950);
-    color: var(--color-fg);
+    background: var(--color-page);
+    color: var(--color-fg-body);
     font-family: var(--font-sans);
+    font-size: 14px; /* observed: Mezo app base size */
     -webkit-font-smoothing: antialiased;
   }
   :focus-visible {
-    outline: 2px solid var(--color-btc);
+    outline: 2px solid var(--color-accent);
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: 6px;
   }
   ::selection {
-    background: color-mix(in oklab, var(--color-btc) 35%, transparent);
+    background: color-mix(in oklab, var(--color-accent) 20%, transparent);
   }
 }
 

@@ -3,13 +3,14 @@
 import { useEffect, useRef, type ReactNode } from "react"
 import type { MarketDto, PositionDto } from "@/lib/market-dto"
 import { amount, boost, boostDelta, compact, integer, utcDateTime } from "@/lib/market-formatting"
+import { ui } from "@/lib/ui"
 import { StatusLabel, lockedBtc, targetText } from "./position-cells"
 
 function Item({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 border-b border-line py-2 text-sm last:border-b-0">
+    <div className="flex items-baseline justify-between gap-4 border-b border-line py-2.5 text-sm last:border-b-0">
       <dt className="text-fg-2">{label}</dt>
-      <dd className="num text-right text-fg">{children}</dd>
+      <dd className="num text-right font-medium text-fg">{children}</dd>
     </div>
   )
 }
@@ -21,7 +22,7 @@ function Address({ label, value, explorerUrl }: { readonly label: string; readon
       {value === null ? (
         <p className="text-fg-3">Unavailable (read failed)</p>
       ) : (
-        <a href={`${explorerUrl}/address/${value}`} target="_blank" rel="noreferrer" className="num break-all text-fg underline decoration-line-strong underline-offset-4 hover:decoration-btc">
+        <a href={`${explorerUrl}/address/${value}`} target="_blank" rel="noreferrer" className={`num break-all ${ui.link}`}>
           {value}
         </a>
       )}
@@ -43,23 +44,18 @@ export function PositionDetail({ position: p, data, onClose }: { readonly positi
   const drift = BigInt(p.boostDrift)
   return (
     <div className="fixed inset-0 z-40 flex justify-end" role="presentation">
-      <button type="button" aria-label="Close details" tabIndex={-1} onClick={onClose} className="absolute inset-0 bg-ink-950/60 backdrop-blur-[1px]" />
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="detail-title"
-        className="relative flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-line bg-ink-900 shadow-2xl"
-      >
-        <div className="sticky top-0 flex items-start justify-between gap-4 border-b border-line bg-ink-900 px-5 py-4">
+      <button type="button" aria-label="Close details" tabIndex={-1} onClick={onClose} className="absolute inset-0 bg-black/30" />
+      <aside role="dialog" aria-modal="true" aria-labelledby="detail-title" className="relative flex h-full w-full max-w-md flex-col overflow-y-auto bg-surface shadow-2xl sm:rounded-l-[var(--radius-lg)]">
+        <div className="sticky top-0 flex items-start justify-between gap-4 border-b border-line bg-surface px-5 py-4">
           <div>
-            <h4 id="detail-title" className="font-condensed text-2xl font-medium">
+            <h4 id="detail-title" className="text-xl font-medium tracking-tight text-fg">
               veBTC #{p.tokenId}
             </h4>
-            <div className="mt-1">
+            <div className="mt-1.5">
               <StatusLabel status={p.status} />
             </div>
           </div>
-          <button ref={closeButton} type="button" onClick={onClose} className="rounded-md border border-line px-2.5 py-1 text-sm text-fg-2 hover:text-fg">
+          <button ref={closeButton} type="button" onClick={onClose} className={ui.btnSecondary}>
             Close
           </button>
         </div>
@@ -74,8 +70,7 @@ export function PositionDetail({ position: p, data, onClose }: { readonly positi
             </dl>
             {drift !== 0n ? (
               <p className="mt-2 text-xs leading-relaxed text-fg-3">
-                The live value is not yet applied to this veBTC. Anyone can apply it with a permissionless poke on Mezo; Boost Relay
-                does not send transactions.
+                The live value is not yet applied to this veBTC. Anyone can apply it with a permissionless poke on Mezo; Boost Relay does not send transactions.
               </p>
             ) : null}
           </section>
@@ -113,8 +108,7 @@ export function PositionDetail({ position: p, data, onClose }: { readonly positi
               </tbody>
             </table>
             <p className="mt-2 text-xs leading-relaxed text-fg-3">
-              Exact minimum veMEZO weight on this gauge under the contract&apos;s integer rounding, at block{" "}
-              {integer(data.meta.blockNumber)}. Requirements drift as voting power decays.
+              Exact minimum veMEZO weight on this gauge under the contract&apos;s integer rounding, at block {integer(data.meta.blockNumber)}. Requirements drift as voting power decays.
             </p>
           </section>
 
