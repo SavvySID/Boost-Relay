@@ -2,7 +2,30 @@
 
 Non-custodial analytics for Mezo Earn's boost market: which veBTC positions are over-boosted, under-boosted or unboosted, and the exact veMEZO vote weight each one needs to reach 2x, 3x or 5x.
 
-This repository currently contains the **data and math foundation** (`@boost-relay/mezo`). The dashboard and the vote optimizer come next and will use this package's API.
+This repository contains:
+
+- **`@boost-relay/mezo`**: the read-only data layer and exact boost math.
+- **`apps/web`**: the **Boost Market** dashboard (Next.js), a read-only view of live Mezo mainnet and testnet data built on that package.
+
+The vote optimizer and wallet-signed voting come next.
+
+## Run the dashboard
+
+```bash
+npm install
+npm run dev          # builds @boost-relay/mezo, then starts http://localhost:3000
+# or, production:
+npm run build && npm start
+```
+
+The browser calls `GET /api/market?network=mainnet|testnet` (add `&refresh=1` to re-read). The server reads one pinned-block snapshot with `@boost-relay/mezo` and returns it as JSON, with every bigint as a decimal string. Behavior:
+
+- **Cache:** a snapshot is re-served for 60 s with its original block and time. A forced refresh re-reads at most once every 15 s per network.
+- **No overlap:** concurrent requests share one in-flight read.
+- **Mapping cache:** the veBTC gauge mapping is reused while `BoostVoter.length()` is unchanged.
+- **No mixing:** switching networks aborts the previous request and clears its data.
+
+A cold mainnet read takes about 8 to 15 s on the public RPC.
 
 ## Safety model
 
@@ -34,9 +57,9 @@ scripts/
 
 ```bash
 npm install
-npm test                    # offline unit tests (no network)
-npm run typecheck
-npm run build               # emits packages/mezo/dist
+npm test                    # offline unit tests (no network): package + web
+npm run typecheck           # package, scripts and the web app (strict)
+npm run build               # packages/mezo/dist, then the Next.js production build
 npm run verify:addresses    # read-only RPC checks, both networks (or: -- mainnet)
 npm run verify:boost -- --network mainnet [--block 12694524] [--fixture path] [--no-incentives]
 ```

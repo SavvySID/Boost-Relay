@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  /* Slate base: cool, slightly blue, never neutral black. */
+  --color-ink-950: #14181f;
+  --color-ink-900: #1a1f28;
+  --color-ink-850: #202633;
+  --color-ink-800: #262d3a;
+  --color-line: #2b3240;
+  --color-line-strong: #3a4354;
+
+  --color-fg: #eceef2;
+  --color-fg-2: #a9b1be;
+  --color-fg-3: #858e9d;
+
+  /* Brand accent: Bitcoin orange, used for actions and focus only. */
+  --color-btc: #f7931a;
+  --color-btc-deep: #c56f07;
+
+  /* Chart roles, validated for the #1a1f28 surface (lightness band, chroma, CVD, contrast). */
+  --color-viz-boost: #d9790e;
+  --color-viz-over: #8f80e6;
+  --color-viz-idle: #199e88;
+
+  /* Status (always paired with an icon and a label). */
+  --color-warn: #e8b931;
+  --color-bad: #f07070;
+
+  --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
+  --font-condensed: var(--font-plex-condensed), var(--font-plex), ui-sans-serif, sans-serif;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    background: var(--color-ink-950);
+  }
+  body {
+    background: var(--color-ink-950);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-btc);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--color-btc) 35%, transparent);
+  }
+}
+
+@utility num {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
