@@ -1,32 +1,27 @@
-import { isNetworkName } from "@boost-relay/mezo"
 import { NextResponse } from "next/server"
 import type { OptimizerResponse } from "@/lib/optimizer-dto"
 import { describeOptimizerError, getRecommendation } from "@/lib/server/optimizer-service"
+import { NO_STORE, fail, parseNetwork, parseTokenId, rateLimited } from "@/lib/server/request-guards"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const maxDuration = 120
 
-const noStore = { "Cache-Control": "no-store" }
-
-/** Read-only: computes vote recommendations for a veMEZO NFT. It never signs or sends a transaction. */
+/** Read-only: computes vote recommendations for any veMEZO NFT. It never signs or sends a transaction. */
 export async function GET(request: Request): Promise<NextResponse<OptimizerResponse>> {
+  const limited = rateLimited("optimize", request)
+  if (limited !== null) return limited
   const url = new URL(request.url)
-  const network = url.searchParams.get("network")
-  const raw = (url.searchParams.get("tokenId") ?? "").trim().replace(/^#/, "")
-  if (!isNetworkName(network)) {
-    return NextResponse.json({ ok: false, error: { code: "invalid-network", message: 'Choose network "mainnet" or "testnet".' } }, { status: 400, headers: noStore })
-  }
-  if (!/^\d{1,30}$/.test(raw) || BigInt(raw) === 0n) {
-    return NextResponse.json({ ok: false, error: { code: "invalid-token", message: "Enter a veMEZO token id: a whole number such as 1024." } }, { status: 400, headers: noStore })
-  }
-  const tokenId = BigInt(raw)
+  const network = parseNetwork(url.searchParams.get("network"))
+  if (network === null) return fail(400, "invalid-network", 'Choose network "mainnet" or "testnet".')
+  const tokenId = parseTokenId(url.searchParams.get("tokenId"))
+  if (tokenId === null) return fail(400, "invalid-token", "Enter a veMEZO token id: a whole number such as 1024.")
   try {
     const { result, source } = await getRecommendation(network, tokenId, { fresh: url.searchParams.get("fresh") === "1" })
-    return NextResponse.json({ ok: true, data: result.dto, served: { source, computedAt: new Date(result.computedAt).toISOString() } }, { headers: noStore })
+    return NextResponse.json({ ok: true, data: result.dto, served: { source, computedAt: new Date(result.computedAt).toISOString() } }, { headers: NO_STORE })
   } catch (error) {
     const d = describeOptimizerError(error, network, tokenId)
     if (d.status >= 500) console.error(`[api/optimize] ${network} #${tokenId} failed`, error)
-    return NextResponse.json({ ok: false, error: { code: d.code, message: d.message } }, { status: d.status, headers: noStore })
+    return NextResponse.json({ ok: false, error: { code: d.code, message: d.message } }, { status: d.status, headers: NO_STORE })
   }
 }

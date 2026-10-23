@@ -57,14 +57,14 @@ describe("post-checks", () => {
     expect(r.checks.filter((c) => !c.ok)).toEqual([])
   })
 
-  it("veMEZO #924 analysis is read-only: inputs are not mutated and nothing but data comes back", () => {
+  it("veMEZO #4242 analysis is read-only: inputs are not mutated and nothing but data comes back", () => {
     const snap = snapshot(BASE)
     const tok = token(100)
     const frozen = JSON.stringify([snap, tok], (_, v) => (typeof v === "bigint" ? v.toString() : v))
     Object.freeze(tok)
     Object.freeze(snap)
     const r = recommend(input(snap, tok))
-    expect(r.tokenId).toBe(924n)
+    expect(r.tokenId).toBe(4242n)
     expect(JSON.stringify([snap, tok], (_, v) => (typeof v === "bigint" ? v.toString() : v))).toBe(frozen)
     expect(Object.keys(r).sort()).toEqual(["blockers", "checks", "lines", "removed", "sourceBlock", "status", "strategy", "summary", "tokenId", "voteCall", "warnings"])
     expect(r.voteCall?.functionName).toBe("vote") // a description of a call, not a call

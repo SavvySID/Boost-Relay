@@ -1,11 +1,9 @@
 import type { MarketSnapshot, NetworkName } from "@boost-relay/mezo"
 import type { OptimizerToken, Recommendation } from "@boost-relay/optimizer"
 import type { VoteGate } from "../vote-dto"
+import { MAX_SNAPSHOT_AGE_SECONDS, VOTE_END_MARGIN_SECONDS } from "../vote-rules"
 
-/** A prepared vote must come from a snapshot whose block is at most this old. */
-export const MAX_SNAPSHOT_AGE_SECONDS = 180
-/** Refuse to prepare inside the last minutes of the vote window, so signing does not race its close. */
-export const VOTE_END_MARGIN_SECONDS = 300
+export { MAX_SNAPSHOT_AGE_SECONDS, VOTE_END_MARGIN_SECONDS }
 
 export interface GateInput {
   readonly network: NetworkName

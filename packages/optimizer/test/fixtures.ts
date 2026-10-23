@@ -74,7 +74,7 @@ export function snapshot(specs: readonly PositionSpec[], options: { maxVotingNum
 export function token(power: number | bigint, options: Partial<OptimizerToken> & { prior?: readonly [number, number][] } = {}): OptimizerToken {
   const entries = (options.prior ?? []).map(([g, v]) => ({ gauge: gauge(g), votes: t(v) }))
   return {
-    tokenId: 924n,
+    tokenId: 4242n,
     owner: "0x00000000000000000000000000000000000a11CE",
     votingPower: typeof power === "bigint" ? power : t(power),
     lastVoted: 0n,

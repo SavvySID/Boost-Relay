@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from "vitest"
 import { stringifyBigints } from "@/lib/optimizer-dto"
 import type { PrepareResponse, PreparedVote, ReceiptResponse, SimulateResponse } from "@/lib/vote-dto"
 import { TESTNET_CHAIN_ID, readConnection, requestConnection, requestTestnetSwitch } from "@/lib/wallet/actions"
-import type { Eip1193Provider } from "@/lib/wallet/eip1193"
-import { integrityProblem, invalidationReason, preflight, prepareVote, submitVote, type FlowState, type VoteApi } from "@/lib/wallet/vote-flow"
+import { parseChainId, type Eip1193Provider } from "@/lib/wallet/eip1193"
+import { integrityProblem, invalidationReason, matchReceipt, preflight, prepareVote, submitVote, type FlowState, type VoteApi } from "@/lib/wallet/vote-flow"
 import { BASE, input, snapshot, token } from "../../../packages/optimizer/test/fixtures"
 
 const OWNER = "0x00000000000000000000000000000000000a11CE"
@@ -17,6 +17,7 @@ const NOW = Date.parse("2026-10-23T00:00:00Z")
 /** Recording mock wallet. It never signs: eth_sendTransaction just returns a fake hash or an error. */
 function mockWallet(opts: { account?: string | null; chainId?: number; rejectConnect?: boolean; sendError?: { code: number; message: string }; switchUnknown?: boolean } = {}) {
   const calls: string[] = []
+  const sends: unknown[] = []
   let account = opts.account === undefined ? OWNER : opts.account
   let chainId = opts.chainId ?? TESTNET_CHAIN_ID
   const provider: Eip1193Provider = {
@@ -38,6 +39,7 @@ function mockWallet(opts: { account?: string | null; chainId?: number; rejectCon
           chainId = Number.parseInt((params as [{ chainId: string }])[0].chainId, 16)
           return null
         case "eth_sendTransaction":
+          sends.push(params)
           if (opts.sendError) throw Object.assign(new Error(opts.sendError.message), { code: opts.sendError.code })
           return HASH
         default:
@@ -48,6 +50,7 @@ function mockWallet(opts: { account?: string | null; chainId?: number; rejectCon
   return {
     provider,
     calls,
+    sends,
     setAccount: (a: string | null) => {
       account = a
     },
@@ -89,8 +92,15 @@ function prepared(overrides: Partial<PreparedVote> = {}): PreparedVote {
   }
 }
 
+/** The mined transaction a receipt reports; by default exactly the reviewed vote. */
+const MINED = { from: OWNER, to: prepared().to, input: prepared().calldata }
+
+function receiptOf(status: "pending" | "success" | "reverted", blockNumber: string | null = "502", transaction: { from: string; to: string | null; input: string } | null = MINED): ReceiptResponse {
+  return status === "pending" ? { ok: true, status, blockNumber: null, gasUsed: null, transaction: null } : { ok: true, status, blockNumber, gasUsed: "21000", transaction }
+}
+
 function mockApi(o: { prepare?: PrepareResponse; simulate?: SimulateResponse; receipts?: (ReceiptResponse | "throw")[]; refreshFails?: boolean } = {}) {
-  const receipts = [...(o.receipts ?? [{ ok: true, status: "success", blockNumber: "502", gasUsed: "21000" }])]
+  const receipts = [...(o.receipts ?? [receiptOf("success")])]
   const api: VoteApi = {
     prepare: vi.fn(async () => o.prepare ?? { ok: true as const, prepared: prepared() }),
     simulate: vi.fn(async () => o.simulate ?? { ok: true as const, blockNumber: "501", simulatedAt: new Date(NOW).toISOString() }),
@@ -171,19 +181,19 @@ describe("preflight and invalidation", () => {
 describe("stage A: prepare never touches the wallet", () => {
   it("returns a reviewable prepared vote", async () => {
     const api = mockApi()
-    const s = await prepareVote({ api }, { network: "testnet", tokenId: "924", strategy: "max-boosted-power", wallet: { account: OWNER, chainId: TESTNET_CHAIN_ID } })
+    const s = await prepareVote({ api }, { network: "testnet", tokenId: "4242", strategy: "max-boosted-power", wallet: { account: OWNER, chainId: TESTNET_CHAIN_ID } })
     expect(s.kind).toBe("ready")
   })
 
   it("shows failed gates for an NFT the account does not own, does not exist, has no power or already voted", async () => {
     for (const [code, message] of [
-      ["not-eligible", "veMEZO #924 is owned by 0xabc, not the connected account."],
+      ["not-eligible", "veMEZO #4242 is owned by 0xabc, not the connected account."],
       ["not-eligible", "This NFT has no voting power."],
       ["not-eligible", "This NFT already voted this epoch; BoostVoter allows one vote per epoch."],
       ["not-eligible", "The voting window for this epoch has closed."],
     ] as const) {
       const api = mockApi({ prepare: { ok: false, error: { code, message }, gates: [{ id: "owner-matches", label: "x", ok: false, detail: message }] } })
-      const s = await prepareVote({ api }, { network: "testnet", tokenId: "924", strategy: "max-boosted-power", wallet: { account: OTHER, chainId: TESTNET_CHAIN_ID } })
+      const s = await prepareVote({ api }, { network: "testnet", tokenId: "4242", strategy: "max-boosted-power", wallet: { account: OTHER, chainId: TESTNET_CHAIN_ID } })
       expect(s).toMatchObject({ kind: "ineligible", message })
     }
     const missing = mockApi({ prepare: { ok: false, error: { code: "token-not-found", message: "veMEZO #9 does not exist on Mezo Testnet." } } })
@@ -192,23 +202,23 @@ describe("stage A: prepare never touches the wallet", () => {
 
   it("does not call the server at all on mainnet or with the wallet on the wrong chain", async () => {
     const api = mockApi()
-    expect(await prepareVote({ api }, { network: "mainnet", tokenId: "924", strategy: "max-boosted-power", wallet: { account: OWNER, chainId: 31612 } })).toEqual({ kind: "mainnet-disabled" })
-    expect(await prepareVote({ api }, { network: "testnet", tokenId: "924", strategy: "max-boosted-power", wallet: { account: OWNER, chainId: 31612 } })).toMatchObject({ kind: "wrong-network" })
+    expect(await prepareVote({ api }, { network: "mainnet", tokenId: "4242", strategy: "max-boosted-power", wallet: { account: OWNER, chainId: 31612 } })).toEqual({ kind: "mainnet-disabled" })
+    expect(await prepareVote({ api }, { network: "testnet", tokenId: "4242", strategy: "max-boosted-power", wallet: { account: OWNER, chainId: 31612 } })).toMatchObject({ kind: "wrong-network" })
     expect(api.prepare).not.toHaveBeenCalled()
   })
 
   it("refuses a server answer prepared for another account or with mismatched calldata", async () => {
     const other = mockApi({ prepare: { ok: true, prepared: prepared({ account: OTHER }) } })
-    expect(await prepareVote({ api: other }, { network: "testnet", tokenId: "924", strategy: "max-boosted-power", wallet: { account: OWNER, chainId: TESTNET_CHAIN_ID } })).toMatchObject({ kind: "prepare-failed" })
+    expect(await prepareVote({ api: other }, { network: "testnet", tokenId: "4242", strategy: "max-boosted-power", wallet: { account: OWNER, chainId: TESTNET_CHAIN_ID } })).toMatchObject({ kind: "prepare-failed" })
     const bad = mockApi({ prepare: { ok: true, prepared: prepared({ calldata: "0x7ac09bf7" }) } })
-    expect(await prepareVote({ api: bad }, { network: "testnet", tokenId: "924", strategy: "max-boosted-power", wallet: { account: OWNER, chainId: TESTNET_CHAIN_ID } })).toMatchObject({ kind: "prepare-failed" })
+    expect(await prepareVote({ api: bad }, { network: "testnet", tokenId: "4242", strategy: "max-boosted-power", wallet: { account: OWNER, chainId: TESTNET_CHAIN_ID } })).toMatchObject({ kind: "prepare-failed" })
   })
 })
 
 describe("stage B: submit, only from the final button", () => {
   it("re-simulates, asks the wallet exactly once, then waits for a real receipt and refreshes", async () => {
     const w = mockWallet()
-    const api = mockApi({ receipts: [{ ok: true, status: "pending", blockNumber: null, gasUsed: null }, { ok: true, status: "success", blockNumber: "502", gasUsed: "21000" }] })
+    const api = mockApi({ receipts: [receiptOf("pending"), receiptOf("success")] })
     const states: FlowState[] = []
     const final = await submitVote(deps(w, api, states), prepared())
     expect(final).toMatchObject({ kind: "confirmed", hash: HASH, blockNumber: "502" })
@@ -216,7 +226,7 @@ describe("stage B: submit, only from the final button", () => {
     expect(w.calls.filter((c) => c === "eth_sendTransaction")).toHaveLength(1)
     expect(w.calls.at(-1)).toBe("eth_sendTransaction") // nothing touches the wallet after signing
     expect(api.simulate).toHaveBeenCalledWith({ network: "testnet", account: OWNER, to: prepared().to, data: prepared().calldata })
-    expect(api.refresh).toHaveBeenCalledWith("testnet", "924")
+    expect(api.refresh).toHaveBeenCalledWith("testnet", "4242")
   })
 
   it("does not ask the wallet to sign when the final simulation fails", async () => {
@@ -254,7 +264,7 @@ describe("stage B: submit, only from the final button", () => {
   })
 
   it("reports a reverted transaction without refreshing as if it succeeded", async () => {
-    const api = mockApi({ receipts: [{ ok: true, status: "reverted", blockNumber: "502", gasUsed: "30000" }] })
+    const api = mockApi({ receipts: [receiptOf("reverted")] })
     expect(await submitVote(deps(mockWallet(), api), prepared())).toMatchObject({ kind: "reverted", blockNumber: "502" })
     expect(api.refresh).not.toHaveBeenCalled()
   })
@@ -274,5 +284,125 @@ describe("stage B: submit, only from the final button", () => {
     const w = mockWallet()
     expect(await submitVote({ ...deps(w, mockApi()), now: () => NOW + 121_000 }, prepared())).toMatchObject({ kind: "invalidated" })
     expect(w.calls).not.toContain("eth_sendTransaction")
+  })
+})
+
+describe("hardening: the prepared vote must be exactly what was asked for", () => {
+  const ask = { network: "testnet" as const, tokenId: "4242", strategy: "max-boosted-power", wallet: { account: OWNER, chainId: TESTNET_CHAIN_ID } }
+
+  it("refuses a server answer for another NFT or strategy", async () => {
+    expect(await prepareVote({ api: mockApi({ prepare: { ok: true, prepared: prepared({ tokenId: "7" }) } }) }, ask)).toMatchObject({ kind: "prepare-failed", message: /different NFT/ })
+    expect(await prepareVote({ api: mockApi({ prepare: { ok: true, prepared: prepared({ strategy: "max-capped-positions" }) } }) }, ask)).toMatchObject({
+      kind: "prepare-failed",
+      message: /different strategy/,
+    })
+  })
+
+  it("fails closed on malformed fields instead of throwing", () => {
+    for (const bad of [{ weights: ["1.5"] }, { weights: ["-1"] }, { weights: ["abc"] }, { weights: ["0"] }, { gauges: ["0x1234"] }, { tokenId: "0" }, { calldata: "not hex" }, { functionName: "reset" }] as const) {
+      expect(integrityProblem(prepared(bad as Partial<PreparedVote>))).toEqual(expect.any(String))
+    }
+    expect(integrityProblem({ ...prepared(), gauges: null } as unknown as PreparedVote)).toEqual(expect.any(String))
+    expect(integrityProblem({ ...prepared(), recommendation: null } as unknown as PreparedVote)).toEqual(expect.any(String))
+  })
+
+  it("treats an unreadable server answer as a failed preparation", async () => {
+    const api = mockApi()
+    api.prepare = vi.fn(async () => null as unknown as PrepareResponse)
+    expect(await prepareVote({ api }, ask)).toMatchObject({ kind: "prepare-failed" })
+    api.prepare = vi.fn(async () => ({ ok: true, prepared: null }) as unknown as PrepareResponse)
+    expect(await prepareVote({ api }, ask)).toMatchObject({ kind: "prepare-failed" })
+  })
+
+  it("stops signing inside the server's five-minute end-of-window margin", () => {
+    const voteEnd = String(NOW / 1000 + 200)
+    expect(invalidationReason(prepared({ voteEnd }), { account: OWNER, chainId: TESTNET_CHAIN_ID }, NOW)).toMatch(/closing or closed/)
+    expect(invalidationReason(prepared({ voteEnd: String(NOW / 1000 + 400) }), { account: OWNER, chainId: TESTNET_CHAIN_ID }, NOW)).toBeNull()
+    expect(invalidationReason(prepared({ expiresAt: "not a date" }), { account: OWNER, chainId: TESTNET_CHAIN_ID }, NOW)).toMatch(/two minutes/)
+  })
+
+  it("reads chain ids strictly", () => {
+    expect(parseChainId("0x7b7b")).toBe(31611)
+    expect(parseChainId("31611")).toBe(31611)
+    for (const bad of ["", "0x", "abc", "0xzz", "-1", "1.5", "0x" + "f".repeat(20)]) expect(() => parseChainId(bad)).toThrow()
+    expect(() => parseChainId(Number.NaN)).toThrow()
+    expect(() => parseChainId(undefined)).toThrow()
+  })
+})
+
+describe("hardening: one prepared vote, at most one send", () => {
+  it("sends with the reviewed calldata, to BoostVoter, pinned to the testnet chain id, with no value", async () => {
+    const w = mockWallet()
+    const p = prepared()
+    await submitVote(deps(w, mockApi()), p)
+    expect(w.sends).toEqual([[{ from: OWNER, to: p.to, data: p.calldata, value: "0x0", chainId: "0x7b7b" }]])
+  })
+
+  it("lets overlapping clicks produce a single wallet request", async () => {
+    const w = mockWallet()
+    const p = prepared()
+    const api = mockApi()
+    const [a, b] = await Promise.all([submitVote(deps(w, api), p), submitVote(deps(w, api), p)])
+    expect(w.calls.filter((c) => c === "eth_sendTransaction")).toHaveLength(1)
+    expect([a.kind, b.kind].sort()).toEqual(["confirmed", "invalidated"])
+  })
+
+  it("refuses to send a prepared vote again once the wallet returned a hash", async () => {
+    const w = mockWallet()
+    const p = prepared()
+    await submitVote(deps(w, mockApi({ receipts: ["throw"] })), p)
+    expect(await submitVote(deps(w, mockApi()), p)).toMatchObject({ kind: "invalidated", reason: /already sent/ })
+    expect(w.calls.filter((c) => c === "eth_sendTransaction")).toHaveLength(1)
+  })
+
+  it("never offers the same prepared vote again after an unknown wallet error", async () => {
+    const w = mockWallet({ sendError: { code: -32603, message: "Internal error" } })
+    const p = prepared()
+    expect(await submitVote(deps(w, mockApi()), p)).toMatchObject({ kind: "submit-failed", message: /Check your wallet's activity/ })
+    expect(await submitVote(deps(mockWallet(), mockApi()), p)).toMatchObject({ kind: "invalidated" })
+  })
+
+  it("still allows signing again after the user rejected the prompt", async () => {
+    const p = prepared()
+    expect(await submitVote(deps(mockWallet({ sendError: { code: 4001, message: "denied" } }), mockApi()), p)).toMatchObject({ kind: "rejected" })
+    const w = mockWallet()
+    expect(await submitVote(deps(w, mockApi()), p)).toMatchObject({ kind: "confirmed" })
+    expect(w.calls.filter((c) => c === "eth_sendTransaction")).toHaveLength(1)
+  })
+
+  it("does not trust a malformed simulation answer", async () => {
+    const w = mockWallet()
+    const api = mockApi()
+    api.simulate = vi.fn(async () => ({ ok: "yes" }) as unknown as SimulateResponse)
+    expect(await submitVote(deps(w, api), prepared())).toMatchObject({ kind: "simulation-failed" })
+    expect(w.calls).not.toContain("eth_sendTransaction")
+  })
+})
+
+describe("hardening: receipts must describe the reviewed vote", () => {
+  it("reports a mined transaction to another contract, from another account or with other data as a mismatch", async () => {
+    for (const tx of [
+      { ...MINED, to: OTHER },
+      { ...MINED, from: OTHER },
+      { ...MINED, input: "0x7ac09bf7" },
+      { ...MINED, to: null },
+    ]) {
+      const api = mockApi({ receipts: [receiptOf("success", "502", tx)] })
+      expect(await submitVote(deps(mockWallet(), api), prepared())).toMatchObject({ kind: "mismatch", hash: HASH })
+      expect(api.refresh).not.toHaveBeenCalled()
+    }
+  })
+
+  it("never calls a hash without a visible transaction confirmed", async () => {
+    const api = mockApi({ receipts: [receiptOf("success", "502", null)] })
+    expect(await submitVote({ ...deps(mockWallet(), api), maxPolls: 3 }, prepared())).toMatchObject({ kind: "receipt-unknown" })
+  })
+
+  it("classifies receipts with matchReceipt", () => {
+    const expected = { account: OWNER, to: MINED.to, calldata: MINED.input }
+    expect(matchReceipt(expected, receiptOf("pending") as Extract<ReceiptResponse, { ok: true }>)).toBe("pending")
+    expect(matchReceipt(expected, receiptOf("success") as Extract<ReceiptResponse, { ok: true }>)).toBe("success")
+    expect(matchReceipt(expected, receiptOf("reverted") as Extract<ReceiptResponse, { ok: true }>)).toBe("reverted")
+    expect(matchReceipt(expected, receiptOf("reverted", "1", { ...MINED, from: OTHER }) as Extract<ReceiptResponse, { ok: true }>)).toBe("mismatch")
   })
 })

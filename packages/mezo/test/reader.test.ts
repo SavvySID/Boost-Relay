@@ -376,10 +376,10 @@ describe("readPositions duplicate handling", () => {
 describe("veMEZO reads", () => {
   const owner = fakeAddress(0xabc)
   beforeEach(() => {
-    fake.veMezo.set(924n, {
+    fake.veMezo.set(4242n, {
       owner,
       lock: { amount: tokens(90n), end: 1_918_425_600n, isPermanent: false, boost: 0n },
-      power: 89_942_291_952_788_172_340n,
+      power: 90_000_000_000_000_000_000n,
       voted: false,
       lastVoted: 0n,
       used: 0n,
@@ -387,15 +387,15 @@ describe("veMEZO reads", () => {
   })
 
   it("reads a position and whether it can vote in this epoch", async () => {
-    const pos = await makeReader(fake).readVeMezoPosition(924n)
-    expect(pos).toMatchObject({ tokenId: 924n, owner, votingPower: 89_942_291_952_788_172_340n, canVoteThisEpoch: true, votedAnywhere: false })
-    const record = fake.veMezo.get(924n)
+    const pos = await makeReader(fake).readVeMezoPosition(4242n)
+    expect(pos).toMatchObject({ tokenId: 4242n, owner, votingPower: 90_000_000_000_000_000_000n, canVoteThisEpoch: true, votedAnywhere: false })
+    const record = fake.veMezo.get(4242n)
     if (record) record.lastVoted = EPOCH_START + 5n
-    expect((await makeReader(fake).readVeMezoPosition(924n)).canVoteThisEpoch).toBe(false)
+    expect((await makeReader(fake).readVeMezoPosition(4242n)).canVoteThisEpoch).toBe(false)
   })
 
   it("lists a wallet's token ids and rejects unknown tokens", async () => {
-    expect(await makeReader(fake).readVeMezoTokenIds(owner)).toEqual([924n])
+    expect(await makeReader(fake).readVeMezoTokenIds(owner)).toEqual([4242n])
     await expect(makeReader(fake).readVeMezoPosition(999n)).rejects.toBeInstanceOf(NotFoundError)
   })
 })
@@ -473,12 +473,12 @@ describe("readVeMezoVoteAllocation", () => {
   const G = (n: number): Address => fakeAddress(0x1000 + n)
 
   it("reads every prior vote and proves completeness against usedWeights", async () => {
-    fake.allocations.set(924n, [
+    fake.allocations.set(4242n, [
       { gauge: G(1), votes: tokens(60n) },
       { gauge: G(3), votes: tokens(30n) },
     ])
-    const a = await makeReader(fake).readVeMezoVoteAllocation(924n)
-    expect(a).toMatchObject({ tokenId: 924n, usedWeight: tokens(90n), complete: true, issues: [] })
+    const a = await makeReader(fake).readVeMezoVoteAllocation(4242n)
+    expect(a).toMatchObject({ tokenId: 4242n, usedWeight: tokens(90n), complete: true, issues: [] })
     expect(a.entries).toEqual([
       { gauge: G(1), votes: tokens(60n) },
       { gauge: G(3), votes: tokens(30n) },
@@ -492,24 +492,24 @@ describe("readVeMezoVoteAllocation", () => {
   })
 
   it("is incomplete when the entries do not add up to usedWeights", async () => {
-    fake.allocations.set(924n, [{ gauge: G(1), votes: tokens(60n) }])
-    fake.usedOverride.set(924n, tokens(61n))
-    const a = await makeReader(fake).readVeMezoVoteAllocation(924n)
+    fake.allocations.set(4242n, [{ gauge: G(1), votes: tokens(60n) }])
+    fake.usedOverride.set(4242n, tokens(61n))
+    const a = await makeReader(fake).readVeMezoVoteAllocation(4242n)
     expect(a.complete).toBe(false)
     expect(a.issues.join(" ")).toMatch(/does not equal usedWeights/)
   })
 
   it("is incomplete when an index read fails at the RPC level", async () => {
-    fake.allocations.set(924n, [{ gauge: G(1), votes: tokens(60n) }])
-    fake.failures.set("veMezoVotes:924:gauge:0", { ok: false, kind: "rpc", error: "timeout" })
-    const a = await makeReader(fake).readVeMezoVoteAllocation(924n)
+    fake.allocations.set(4242n, [{ gauge: G(1), votes: tokens(60n) }])
+    fake.failures.set("veMezoVotes:4242:gauge:0", { ok: false, kind: "rpc", error: "timeout" })
+    const a = await makeReader(fake).readVeMezoVoteAllocation(4242n)
     expect(a.complete).toBe(false)
     expect(a.issues[0]).toMatch(/gaugeVote\[0\] read failed/)
   })
 
   it("is incomplete when the array is longer than the probe window", async () => {
-    fake.allocations.set(924n, Array.from({ length: 50 }, (_, i) => ({ gauge: fakeAddress(0x5000 + i), votes: 1n })))
-    const a = await makeReader(fake).readVeMezoVoteAllocation(924n)
+    fake.allocations.set(4242n, Array.from({ length: 50 }, (_, i) => ({ gauge: fakeAddress(0x5000 + i), votes: 1n })))
+    const a = await makeReader(fake).readVeMezoVoteAllocation(4242n)
     expect(a.complete).toBe(false)
     expect(a.issues.join(" ")).toMatch(/more than 46 entries/)
   })

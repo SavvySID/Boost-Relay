@@ -59,21 +59,81 @@ Below a recommendation, **Vote with your wallet** lets the NFT's owner cast it o
 - checks 12 gates: testnet, the NFT exists, the connected account is the owner, power > 0, not voted this epoch, inside the vote window with a 5-minute margin, snapshot complete and under 3 minutes old, existing votes fully read, actionable plan, plan checks pass, weights sum to power;
 - simulates `vote()` with `eth_call` **from the connected account** at the latest block.
 
-Nothing is signed. The review then shows the exact call: chain, from, BoostVoter, method, token, every gauge and weight, and the votes it replaces. The calldata is shown on request. A prepared vote expires after 2 minutes, and it is invalidated if the account or chain changes or the window closes.
+Nothing is signed. The browser then re-checks the server's answer before showing it:
+
+- it is for the same account, token and strategy the page asked for;
+- it targets the verified BoostVoter on chain 31611, with valid gauges, positive weights and no duplicates;
+- the calldata, re-encoded with the verified ABI, equals the calldata that will be sent.
+
+Any malformed or mismatched field fails closed.
+
+The review shows the exact call: chain, from, BoostVoter, method, token, every gauge and weight, and the votes it replaces. The calldata is shown on request. If fresh chain data changed the plan since the recommendation above it, the review says so. A prepared vote expires after 2 minutes. It is invalidated if the account or chain changes, or once the window is within 5 minutes of closing. A preparation that finishes after you switched NFT, strategy or wallet is discarded.
 
 **Stage B: Sign & Submit Vote.** This is enabled only after you tick the acknowledgement. The click:
 
 1. Re-reads the wallet without prompting.
 2. Re-encodes the calldata in the browser and checks it matches.
-3. Re-simulates on the server (`POST /api/vote/simulate`).
-4. Sends one `eth_sendTransaction` to the wallet.
-5. Waits for the real receipt (`GET /api/vote/receipt`).
+3. Re-simulates on the server (`POST /api/vote/simulate`). That route re-checks ownership, `canVoteThisEpoch`, voting power and the 5-minute margin from the chain.
+4. Re-reads the wallet again, then sends one `eth_sendTransaction`: `{ from, to: BoostVoter, data, value: 0x0, chainId: 0x7b7b }`. Wallets that check `chainId`, such as MetaMask, refuse to sign it on any other network.
+5. Waits for the real receipt (`GET /api/vote/receipt`). It counts as the vote only if the mined transaction is from your account, to BoostVoter, with exactly the reviewed calldata.
 
-It never treats wallet approval as success and never resubmits. Each outcome has its own state: rejected, simulation failed, pending, reverted, confirmed, receipt unknown, and refresh failed.
+Each prepared vote can be sent at most once. Overlapping clicks produce one wallet request, and a prepared vote that already produced a hash, or hit an unknown wallet error, is never offered again. After a hash, the tab remembers the vote for that NFT and epoch. Until its outcome is known, another vote for the same NFT can't be prepared there. **Check status** re-reads the receipt only and sends nothing.
+
+The app never treats wallet approval or a hash as success, and never resubmits or retries after a timeout. Each outcome has its own state: rejected, simulation failed, pending, reverted, wrong transaction, confirmed, receipt unknown, and refresh failed.
 
 After a confirmed vote the optimizer re-reads the chain. Live boost reflects the vote at once. The boost applied to each veBTC changes only after someone calls the permissionless `pokeBoost`, and Boost Relay never pokes.
 
 On mainnet the panel shows "Voting is disabled", and the prepare API returns 403.
+
+## Release readiness
+
+| | Mezo Mainnet (31612) | Mezo Testnet (31611) |
+|---|---|---|
+| Boost Market, Vote Optimizer | Read-only | Read-only |
+| Prepare & simulate (`eth_call`) | Disabled (403) | Yes |
+| Sign & submit a vote | Disabled | Yes, by the NFT owner's own wallet |
+
+**What can change chain state:** only `BoostVoter.vote()`, signed in the user's browser wallet after the review and acknowledgement. The server has no wallet client, keys or signing code (a unit test enforces this). It never calls `reset`, `poke`, `pokeBoost`, approvals, claims or incentive deposits.
+
+**Wallet prerequisites:** a desktop browser with an injected EVM wallet extension that supports EIP-1193 (EIP-6963 preferred), and the NFT owner's account. The owner needs a little testnet BTC for gas. There is no WalletConnect, mobile wallet deep link or delegated (approved-operator) voting.
+
+**Environment:** no variables are required. `MEZO_MAINNET_RPC_URL` and `MEZO_TESTNET_RPC_URL` optionally override the public RPCs. They are read only on the server, never reach the browser or the wallet, and are never echoed in errors. No private key or deployer account is needed.
+
+**Server hardening.** API routes:
+
+- validate every parameter strictly: networks, positive integer token ids, addresses, strategies, hex calldata, transaction hashes;
+- cap JSON bodies at 16 KB and require `application/json`;
+- answer with `Cache-Control: no-store`;
+- replace RPC and transport errors with fixed text.
+
+The vote endpoints refuse cross-site browser requests (`Sec-Fetch-Site`). Routes that spend RPC calls are rate-limited per client: prepare 15/min, simulate 20/min, optimize 40/min, market 60/min, receipt 90/min. These limits live in each server process, so they are best-effort, not a defence against distributed abuse. Snapshot refreshes are throttled to one per network every 15 s, and concurrent reads share one request.
+
+**Browser hardening.** Every response sends:
+
+- a Content Security Policy: same-origin scripts, styles, fonts and `connect-src`, and `frame-ancestors 'none'` so the signing UI can't be framed;
+- `X-Frame-Options: DENY`, `nosniff`, a strict referrer policy, a minimal permissions policy, COOP and HSTS.
+
+Pages are prerendered, so the CSP has to allow inline scripts (Next.js bootstrap) instead of per-request nonces.
+
+**Checks before a demo:**
+
+```bash
+npm test && npm run typecheck && npm run build
+npm run verify:vote -- --token <veMEZO id>   # read-only: chain ids, contract code, snapshot, token state, eth_call as owner and non-owner
+```
+
+**Known risks:**
+
+- A passing simulation is not a guarantee. Gauge weights, voting power or the epoch can change between the final simulation and inclusion; the transaction may then revert, and the app reports that.
+- The browser checks can't stop a malicious or compromised wallet from showing or signing something else. The app detects a returned hash that is not the reviewed vote, but it can't prevent it. Always read the wallet's own prompt.
+- The once-per-tab record of sent votes is a convenience guard. A different tab or browser doesn't see it; the chain's one-vote-per-epoch rule is the backstop.
+
+**Remaining before public deployment:**
+
+- choose a host and domain, then add a canonical URL and a social image;
+- run behind HTTPS;
+- consider a shared rate-limit store if the app runs on several instances;
+- re-run `verify:addresses` and `verify:vote` against the deployment.
 
 ## Design
 
@@ -135,6 +195,7 @@ npm run typecheck           # package, scripts and the web app (strict)
 npm run build               # packages/mezo/dist, then the Next.js production build
 npm run verify:addresses    # read-only RPC checks, both networks (or: -- mainnet)
 npm run verify:boost -- --network mainnet [--block 12694524] [--fixture path] [--no-incentives]
+npm run verify:vote -- --token <id> [--strategy max-capped-positions]   # read-only vote readiness on testnet
 ```
 
 Optional RPC overrides go in `.env` (see `.env.example`): `MEZO_MAINNET_RPC_URL`, `MEZO_TESTNET_RPC_URL`.

@@ -1,6 +1,7 @@
-import { NotFoundError, isNetworkName } from "@boost-relay/mezo"
+import { NotFoundError } from "@boost-relay/mezo"
 import { NextResponse } from "next/server"
 import { describeError } from "@/lib/server/market-service"
+import { NO_STORE, fail, parseAddress, parseNetwork, parseStrategy, parseTokenId, rateLimited, rejectCrossSite } from "@/lib/server/request-guards"
 import { prepareVote } from "@/lib/server/vote-service"
 import type { PrepareResponse } from "@/lib/vote-dto"
 
@@ -8,29 +9,33 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const maxDuration = 120
 
-const noStore = { "Cache-Control": "no-store" }
-const STRATEGIES = new Set(["max-boosted-power", "max-capped-positions"])
+/** Status for each refusal: bad input 400, mainnet 403, ineligible 422 (with the gates), otherwise 200. */
+const STATUS: Record<string, number> = { "mainnet-disabled": 403, "invalid-account": 400, "not-eligible": 422 }
 
 /**
  * Read-only: prepares and simulates a vote for the connected account. It never signs or sends;
- * only the user's wallet can do that, after an explicit click in the browser.
+ * only the user's wallet can do that, after an explicit click in the browser. Ownership and
+ * eligibility come from the chain, never from the request.
  */
 export async function GET(request: Request): Promise<NextResponse<PrepareResponse>> {
+  const blocked = rejectCrossSite(request) ?? rateLimited("prepare", request)
+  if (blocked !== null) return blocked
   const url = new URL(request.url)
-  const network = url.searchParams.get("network")
-  const rawToken = (url.searchParams.get("tokenId") ?? "").trim()
-  const strategy = url.searchParams.get("strategy") ?? ""
-  const account = url.searchParams.get("account") ?? ""
-  if (!isNetworkName(network)) return NextResponse.json({ ok: false, error: { code: "invalid-network", message: 'Choose network "mainnet" or "testnet".' } }, { status: 400, headers: noStore })
-  if (!/^\d{1,30}$/.test(rawToken) || BigInt(rawToken) === 0n) return NextResponse.json({ ok: false, error: { code: "invalid-token", message: "Enter a whole-number veMEZO token id." } }, { status: 400, headers: noStore })
-  if (!STRATEGIES.has(strategy)) return NextResponse.json({ ok: false, error: { code: "invalid-strategy", message: "Unknown strategy." } }, { status: 400, headers: noStore })
-  const tokenId = BigInt(rawToken)
+  const network = parseNetwork(url.searchParams.get("network"))
+  if (network === null) return fail(400, "invalid-network", 'Choose network "mainnet" or "testnet".')
+  const tokenId = parseTokenId(url.searchParams.get("tokenId"))
+  if (tokenId === null) return fail(400, "invalid-token", "Enter a whole-number veMEZO token id.")
+  const strategy = parseStrategy(url.searchParams.get("strategy"))
+  if (strategy === null) return fail(400, "invalid-strategy", "Unknown strategy.")
+  const account = parseAddress(url.searchParams.get("account"))
+  if (account === null) return fail(400, "invalid-account", "The connected account is not a valid address.")
   try {
-    const result = await prepareVote({ network, tokenId, strategy: strategy as "max-boosted-power" | "max-capped-positions", account })
-    return NextResponse.json(result, { status: result.ok ? 200 : result.error.code === "mainnet-disabled" ? 403 : 200, headers: noStore })
+    const result = await prepareVote({ network, tokenId, strategy, account })
+    return NextResponse.json(result, { status: result.ok ? 200 : (STATUS[result.error.code] ?? 200), headers: NO_STORE })
   } catch (error) {
-    if (error instanceof NotFoundError) return NextResponse.json({ ok: false, error: { code: "token-not-found", message: `veMEZO #${tokenId} does not exist on Mezo Testnet.` } }, { status: 404, headers: noStore })
+    if (error instanceof NotFoundError) return fail(404, "token-not-found", `veMEZO #${tokenId} does not exist on Mezo Testnet.`)
     console.error(`[api/vote/prepare] #${tokenId} failed`, error)
-    return NextResponse.json({ ok: false, error: describeError(error, network) }, { status: 502, headers: noStore })
+    const d = describeError(error, network)
+    return fail(502, d.code, d.message)
   }
 }

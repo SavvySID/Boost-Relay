@@ -1,14 +1,16 @@
 "use client"
 
+import { mezoTestnet } from "@boost-relay/mezo/chains"
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import type { NetworkName } from "@/lib/market-dto"
 import { amount, boost, integer, relativeAge, short, utcDateTime } from "@/lib/market-formatting"
-import type { OptimizerDto } from "@/lib/optimizer-dto"
+import type { OptimizerDto, RecommendationDto } from "@/lib/optimizer-dto"
 import { chip, ui } from "@/lib/ui"
 import { ACKNOWLEDGEMENTS } from "@/lib/vote-copy"
 import type { PreparedVote, VoteGate } from "@/lib/vote-dto"
 import { TESTNET_CHAIN_ID } from "@/lib/wallet/actions"
-import { httpVoteApi, invalidationReason, prepareVote, preflight, submitVote, type FlowState, type VoteApi } from "@/lib/wallet/vote-flow"
+import { recordSentVote, unresolvedSentVote, updateSentVote, type SentVote } from "@/lib/wallet/sent-votes"
+import { httpVoteApi, invalidationReason, matchReceipt, prepareVote, preflight, submitVote, type FlowState, type VoteApi } from "@/lib/wallet/vote-flow"
 import { chainLabel } from "../wallet/wallet-button"
 import { useWallet } from "../wallet/wallet-provider"
 import type { Strategy } from "./strategy-selector"
@@ -47,12 +49,29 @@ function Gates({ gates }: { readonly gates: readonly VoteGate[] }) {
   )
 }
 
-function TxLink({ explorerUrl, hash }: { readonly explorerUrl: string; readonly hash: string }) {
+/** Votes are only ever sent on Mezo Testnet, so transaction links always use the testnet explorer. */
+const TESTNET_EXPLORER = mezoTestnet.blockExplorers?.default.url ?? "https://explorer.test.mezo.org"
+
+function TxLink({ hash }: { readonly hash: string }) {
   return (
-    <a href={`${explorerUrl}/tx/${hash}`} target="_blank" rel="noreferrer" className={`num break-all ${ui.link}`}>
+    <a href={`${TESTNET_EXPLORER}/tx/${hash}`} target="_blank" rel="noreferrer" className={`num break-all ${ui.link}`}>
       {hash}
     </a>
   )
+}
+
+/** States in which a transaction is being signed or is already on its way: never reset by navigation. */
+const SENDING = new Set<FlowState["kind"]>(["checking", "awaiting-signature", "pending"])
+/** States that carry a transaction hash returned by the wallet. */
+const HAS_HASH = new Set<FlowState["kind"]>(["pending", "reverted", "receipt-unknown", "mismatch", "confirmed", "refresh-failed"])
+
+/** True when the freshly prepared gauges or weights differ from the recommendation shown above. */
+function planChanged(prepared: PreparedVote, shown: RecommendationDto): boolean {
+  const call = shown.voteCall
+  if (call === null) return true
+  const a = prepared.gauges.map((g, i) => `${g.toLowerCase()}=${prepared.weights[i]}`).join(",")
+  const b = call.gauges.map((g, i) => `${g.toLowerCase()}=${call.weights[i]}`).join(",")
+  return a !== b
 }
 
 /**
@@ -80,14 +99,16 @@ export function VotePanel(props: {
     return () => window.clearInterval(id)
   }, [])
 
-  // A prepared vote is tied to one account, chain, token and strategy. Any change invalidates it.
+  // A prepared vote is tied to one account, chain, token and strategy. Any change invalidates it,
+  // except while a transaction is being signed or is on its way: that state stays visible.
   const preparedKey = `${data.token.tokenId}|${strategy}|${network}`
   const lastKey = useRef(preparedKey)
   useEffect(() => {
     if (lastKey.current !== preparedKey) {
       lastKey.current = preparedKey
-      setFlow({ kind: "idle" })
+      setFlow((f) => (SENDING.has(f.kind) ? f : { kind: "idle" }))
       setAcknowledged(false)
+      setCheckingSent(null)
     }
   }, [preparedKey])
   useEffect(() => {
@@ -98,23 +119,73 @@ export function VotePanel(props: {
     })
   }, [w.account, w.chainId, now])
 
+  // Remember every vote that produced a hash, so a second one for the same NFT and epoch cannot be
+  // prepared while the first one's outcome is unknown.
+  const [sentVersion, setSentVersion] = useState(0)
+  useEffect(() => {
+    if (!HAS_HASH.has(flow.kind) || !("hash" in flow) || !("prepared" in flow)) return
+    const p = flow.prepared
+    const status = flow.kind === "confirmed" || flow.kind === "refresh-failed" ? "confirmed" : flow.kind === "reverted" ? "reverted" : flow.kind === "mismatch" ? "mismatch" : "unresolved"
+    recordSentVote({ tokenId: p.tokenId, epochStart: p.epochStart, hash: flow.hash, account: p.account, to: p.to, calldata: p.calldata, status, sentAt: Date.now() })
+    setSentVersion((v) => v + 1)
+  }, [flow])
+  const outstanding: SentVote | null = sentVersion >= 0 ? unresolvedSentVote(data.token.tokenId, data.epoch.epochStart) : null
+  const [checkingSent, setCheckingSent] = useState<string | null>(null)
+  const checkOutstanding = useCallback(async (vote: SentVote) => {
+    setCheckingSent("Checking…")
+    try {
+      const r = await api.receipt("testnet", vote.hash)
+      if (!r.ok) {
+        setCheckingSent("The receipt could not be read. Check the explorer.")
+        return
+      }
+      const result = matchReceipt(vote, r)
+      if (result === "pending") {
+        setCheckingSent("Still no receipt. The transaction may be pending or may not have been broadcast; check your wallet and the explorer.")
+        return
+      }
+      updateSentVote(vote.tokenId, vote.epochStart, result === "success" ? "confirmed" : result)
+      setSentVersion((v) => v + 1)
+      setCheckingSent(
+        result === "success" ? "The earlier vote is confirmed." : result === "reverted" ? "The earlier transaction reverted; no vote was recorded." : "The earlier hash is not this vote.",
+      )
+      if (result === "success") await onRefresh(network, vote.tokenId).catch(() => undefined)
+    } catch {
+      setCheckingSent("The receipt could not be read. Check the explorer.")
+    }
+    // api is rebuilt per render from the stable onRefresh.
+  }, [onRefresh, network])
+
+  // Each preparation gets a ticket; a result that arrives after the token, strategy, network or
+  // wallet changed is dropped instead of showing a vote for the old selection.
+  const ticket = useRef(0)
   const prepare = useCallback(async () => {
     if (busy.current) return
     busy.current = true
+    const mine = ++ticket.current
+    const key = preparedKey
+    const wallet = { account: w.account, chainId: w.chainId }
     setAcknowledged(false)
     setFlow({ kind: "preparing" })
+    let next: FlowState
     try {
-      setFlow(await prepareVote({ api }, { network, tokenId: data.token.tokenId, strategy, wallet: { account: w.account, chainId: w.chainId } }))
+      next = await prepareVote({ api }, { network, tokenId: data.token.tokenId, strategy, wallet })
+    } catch {
+      next = { kind: "prepare-failed", message: "The vote could not be prepared. Nothing was sent." }
     } finally {
       busy.current = false
     }
+    if (mine !== ticket.current || key !== lastKey.current) return
+    setFlow(next)
     // api is rebuilt per render from the stable onRefresh, so these inputs fully determine the call.
-  }, [network, data.token.tokenId, strategy, w.account, w.chainId, onRefresh])
+  }, [network, data.token.tokenId, strategy, w.account, w.chainId, onRefresh, preparedKey])
 
   const signAndSubmit = useCallback(
     async (prepared: PreparedVote) => {
+      // One click, one attempt: the ref blocks re-entry before React re-renders the disabled button.
       if (busy.current || !acknowledged || w.wallet === null) return
       busy.current = true
+      setAcknowledged(false)
       try {
         const final = await submitVote(
           { provider: w.wallet.provider, api, now: () => Date.now(), sleep: (ms) => new Promise((r) => setTimeout(r, ms)), onState: setFlow },
@@ -123,7 +194,6 @@ export function VotePanel(props: {
         setFlow(final)
       } finally {
         busy.current = false
-        setAcknowledged(false)
       }
     },
     [acknowledged, w.wallet, onRefresh],
@@ -136,7 +206,7 @@ export function VotePanel(props: {
   if (ownerMismatch) notes.push(`The connected account does not own veMEZO #${data.token.tokenId} (owner ${short(data.token.owner)}). Only the owner can vote in this version.`)
   if (!data.token.canVoteThisEpoch) notes.push("This NFT cannot vote right now (already voted this epoch or outside the voting window). The recommendation is for analysis only.")
   if (rec.status !== "actionable") notes.push("The selected strategy has no actionable recommendation for this NFT.")
-  const canPrepare = blocked === null && notes.length === 0
+  const canPrepare = blocked === null && notes.length === 0 && outstanding === null
 
   const inStageA = ["idle", "invalidated", "ineligible", "prepare-failed", "preparing", "mainnet-disabled", "disconnected", "wrong-network"].includes(flow.kind)
 
@@ -221,6 +291,22 @@ export function VotePanel(props: {
               </ul>
             </Notice>
           ) : null}
+          {outstanding !== null ? (
+            <Notice tone="warn" title={`A vote for veMEZO #${outstanding.tokenId} was already sent from this browser`}>
+              <p>Its outcome is not known yet, so another vote for this NFT cannot be prepared this epoch. Do not send it again. Transaction:</p>
+              <TxLink hash={outstanding.hash} />
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <button type="button" onClick={() => void checkOutstanding(outstanding)} className={ui.btnSecondary}>
+                  Check status
+                </button>
+                {checkingSent ? <span className="text-xs">{checkingSent}</span> : null}
+              </div>
+            </Notice>
+          ) : checkingSent !== null ? (
+            <Notice tone="info" title="Earlier vote checked">
+              {checkingSent}
+            </Notice>
+          ) : null}
           {flow.kind === "invalidated" ? <Notice tone="warn" title="The prepared vote is no longer valid">{flow.reason}</Notice> : null}
           {flow.kind === "prepare-failed" ? <Notice tone="danger" title="Preparation failed">{flow.message} Nothing was sent.</Notice> : null}
           {flow.kind === "ineligible" ? (
@@ -240,11 +326,15 @@ export function VotePanel(props: {
         </div>
       ) : null}
 
-      {flow.kind === "ready" || flow.kind === "checking" || flow.kind === "awaiting-signature" || flow.kind === "simulation-failed" || flow.kind === "rejected" ? (
+      {/* A signable review is never rendered while the wallet is disconnected or on another chain, even for
+          the moment before the invalidation effect runs. A send already in progress stays visible. */}
+      {flow.kind === "checking" ||
+      flow.kind === "awaiting-signature" ||
+      ((flow.kind === "ready" || flow.kind === "simulation-failed" || flow.kind === "rejected") && blocked === null && invalidationReason(flow.prepared, walletSnapshot, now) === null) ? (
         <ReviewStage
           prepared={flow.prepared}
           flow={flow}
-          explorerUrl={data.explorerUrl}
+          changedFromShown={planChanged(flow.prepared, rec)}
           now={now}
           acknowledged={acknowledged}
           onAcknowledge={setAcknowledged}
@@ -264,33 +354,62 @@ export function VotePanel(props: {
       ) : null}
 
       {flow.kind === "pending" ? (
-        <Notice tone="info" title="Transaction sent. Waiting for it to be included…">
-          <p>Not confirmed yet. Transaction:</p>
-          <TxLink explorerUrl={data.explorerUrl} hash={flow.hash} />
+        <Notice tone="info" title={`Transaction sent for veMEZO #${flow.prepared.tokenId}. Waiting for it to be included…`}>
+          <p>Not confirmed yet. A hash is not a confirmation. Transaction:</p>
+          <TxLink hash={flow.hash} />
         </Notice>
       ) : null}
       {flow.kind === "reverted" ? (
         <Notice tone="danger" title="The transaction reverted">
-          <p>It was included{flow.blockNumber ? ` in block ${integer(flow.blockNumber)}` : ""} but failed, so no vote was recorded.</p>
-          <TxLink explorerUrl={data.explorerUrl} hash={flow.hash} />
+          <p>
+            It was included{flow.blockNumber ? ` in block ${integer(flow.blockNumber)}` : ""} but failed, so no vote was recorded for veMEZO #{flow.prepared.tokenId}.
+          </p>
+          <TxLink hash={flow.hash} />
         </Notice>
       ) : null}
       {flow.kind === "receipt-unknown" ? (
         <Notice tone="warn" title="Receipt not available yet">
           <p>{flow.message}</p>
-          <TxLink explorerUrl={data.explorerUrl} hash={flow.hash} />
+          <TxLink hash={flow.hash} />
+          {outstanding !== null ? (
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <button type="button" onClick={() => void checkOutstanding(outstanding)} className={ui.btnSecondary}>
+                Check status
+              </button>
+              {checkingSent ? <span className="text-xs">{checkingSent}</span> : null}
+            </div>
+          ) : null}
         </Notice>
+      ) : null}
+      {flow.kind === "mismatch" ? (
+        <Notice tone="danger" title="This is not the vote you reviewed">
+          <p>{flow.message}</p>
+          <TxLink hash={flow.hash} />
+        </Notice>
+      ) : null}
+      {flow.kind === "reverted" || flow.kind === "mismatch" ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={() => setFlow({ kind: "idle" })} className={ui.btnSecondary}>
+            Start over
+          </button>
+          <p className="text-xs text-fg-3">Check your wallet&apos;s activity first. Starting over prepares a fresh vote from current chain data.</p>
+        </div>
       ) : null}
       {flow.kind === "confirmed" || flow.kind === "refresh-failed" ? (
         <div className="grid gap-3">
-          <Notice tone="success" title={`Vote confirmed${flow.blockNumber ? ` in block ${integer(flow.blockNumber)}` : ""}`}>
-            <TxLink explorerUrl={data.explorerUrl} hash={flow.hash} />
+          <Notice tone="success" title={`Vote confirmed for veMEZO #${flow.prepared.tokenId}${flow.blockNumber ? ` in block ${integer(flow.blockNumber)}` : ""}`}>
+            <TxLink hash={flow.hash} />
             <p className="mt-2">
-              The token card and recommendation above now read the new allocation from the chain. Live boost reflects the vote; the boost applied to each veBTC stays
-              as it was until someone calls the permissionless pokeBoost. No incentive amount or reward is implied.
+              {flow.kind === "confirmed" ? "The token card and recommendation above were re-read from the chain after the vote. " : ""}
+              Live boost reflects the vote; the boost applied to each veBTC stays as it was until someone calls the permissionless pokeBoost. No incentive amount or
+              reward is implied.
             </p>
           </Notice>
-          {flow.kind === "refresh-failed" ? <Notice tone="warn" title="The data refresh after the vote failed">{flow.message} Use Recalculate to read the chain again.</Notice> : null}
+          {flow.kind === "refresh-failed" ? (
+            <Notice tone="warn" title="The data refresh after the vote failed">
+              {flow.message} The figures above are from before the vote. Use Recalculate to read the chain again.
+            </Notice>
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -300,7 +419,8 @@ export function VotePanel(props: {
 function ReviewStage(props: {
   readonly prepared: PreparedVote
   readonly flow: FlowState
-  readonly explorerUrl: string
+  /** The fresh plan differs from the recommendation shown above (chain state moved). */
+  readonly changedFromShown: boolean
   readonly now: number
   readonly acknowledged: boolean
   readonly onAcknowledge: (v: boolean) => void
@@ -321,6 +441,12 @@ function ReviewStage(props: {
         </h4>
         <span className={chip(secondsLeft > 0 ? "success" : "warn")}>{secondsLeft > 0 ? `Simulation passed, valid for ${secondsLeft}s` : "Expired, prepare again"}</span>
       </div>
+      {props.changedFromShown ? (
+        <Notice tone="info" title="Fresh chain data changed the plan">
+          The gauges or weights below differ from the recommendation shown above, because voting power or gauge weights moved since it was calculated.
+          What is listed here is exactly what you would sign.
+        </Notice>
+      ) : null}
       <dl>
         <Row label="Network">Mezo Testnet (chain {p.chainId})</Row>
         <Row label="From (your wallet)">{p.account}</Row>

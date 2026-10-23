@@ -42,10 +42,15 @@ export function errorMessage(error: unknown): string {
   return String(error)
 }
 
+/** Chain id from a wallet (hex or decimal). Anything unreadable throws, so callers fail closed. */
 export function parseChainId(value: unknown): number {
-  if (typeof value === "string") return value.startsWith("0x") ? Number.parseInt(value, 16) : Number.parseInt(value, 10)
-  if (typeof value === "number") return value
-  throw new Error("wallet returned an unreadable chain id")
+  let id = Number.NaN
+  if (typeof value === "string") {
+    if (/^0x[0-9a-fA-F]{1,13}$/.test(value)) id = Number.parseInt(value, 16)
+    else if (/^\d{1,15}$/.test(value)) id = Number.parseInt(value, 10)
+  } else if (typeof value === "number") id = value
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("wallet returned an unreadable chain id")
+  return id
 }
 
 export function toHexChainId(chainId: number): string {

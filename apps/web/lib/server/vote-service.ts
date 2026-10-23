@@ -11,15 +11,21 @@ import {
   type Hex,
   type PublicClient,
 } from "viem"
-import { CHAINS, boostVoterAbi, getDeployment, resolveRpcUrl } from "@boost-relay/mezo"
+import { CHAINS, boostVoterAbi, getDeployment, getEpochInfo, resolveRpcUrl } from "@boost-relay/mezo"
 import { recommend, type OptimizerToken, type StrategyId } from "@boost-relay/optimizer"
 import { stringifyBigints } from "../optimizer-dto"
 import type { PrepareResponse, ReceiptResponse, SimulateResponse, VoteGate } from "../vote-dto"
+import { MAX_GAUGES_PER_CALL, PREPARED_TTL_MS, VOTE_END_MARGIN_SECONDS } from "../vote-rules"
 import { getMarket, readerFor } from "./market-service"
 import { assessVote } from "./vote-gates"
 
-/** A prepared vote must be signed within this window or prepared again. */
-export const PREPARED_TTL_MS = 120_000
+export { PREPARED_TTL_MS }
+
+/** Read-only calls the receipt lookup needs; injectable so tests never touch a network. */
+export interface ReceiptClient {
+  getTransactionReceipt(args: { hash: Hex }): Promise<{ status: "success" | "reverted"; blockNumber: bigint; gasUsed: bigint }>
+  getTransaction(args: { hash: Hex }): Promise<{ from: Address; to: Address | null; input: Hex }>
+}
 
 const holderKey = Symbol.for("boost-relay.vote-service")
 const holder = globalThis as unknown as Record<symbol, { client?: PublicClient } | undefined>
@@ -56,9 +62,18 @@ export function describeRevert(error: unknown): { code: string; message: string 
       const name = revert.data?.errorName ?? "reverted"
       return { code: `revert:${name}`, message: REVERT_TEXT[name] ?? `The contract rejected the vote (${name}).` }
     }
-    return { code: "simulation-error", message: error.shortMessage }
   }
+  // Anything else (RPC or transport failure) gets a fixed text: raw messages can carry RPC URLs.
   return { code: "simulation-error", message: "The simulation could not be completed." }
+}
+
+/** Structural checks on decoded vote() arguments, before any RPC is spent on them. */
+export function voteArgsProblem(gauges: readonly string[], weights: readonly bigint[]): string | null {
+  if (gauges.length === 0 || gauges.length !== weights.length) return "Gauge and weight lists are empty or differ in length."
+  if (gauges.length > MAX_GAUGES_PER_CALL) return "Too many gauges for one vote."
+  if (new Set(gauges.map((g) => g.toLowerCase())).size !== gauges.length) return "A gauge appears twice."
+  if (weights.some((w) => w <= 0n)) return "Every weight must be positive."
+  return null
 }
 
 async function simulate(account: Address, tokenId: bigint, gauges: readonly Address[], weights: readonly bigint[]): Promise<{ ok: true; blockNumber: bigint } | { ok: false; code: string; message: string }> {
@@ -86,7 +101,7 @@ async function simulate(account: Address, tokenId: bigint, gauges: readonly Addr
  */
 export async function prepareVote(params: { network: "mainnet" | "testnet"; tokenId: bigint; strategy: StrategyId; account: string }): Promise<PrepareResponse> {
   if (params.network !== "testnet") return { ok: false, error: { code: "mainnet-disabled", message: "Voting is disabled on mainnet during the testnet beta." } }
-  if (!isAddress(params.account)) return { ok: false, error: { code: "invalid-account", message: "The connected account is not a valid address." } }
+  if (!isAddress(params.account, { strict: false })) return { ok: false, error: { code: "invalid-account", message: "The connected account is not a valid address." } }
   const account = params.account as Address
   const deployment = getDeployment("testnet")
 
@@ -152,7 +167,7 @@ export async function prepareVote(params: { network: "mainnet" | "testnet"; toke
 /** Re-checks ownership and epoch eligibility, then re-simulates the exact calldata as the account. */
 export async function simulateVote(request: { network: string; account: string; to: string; data: string }): Promise<SimulateResponse> {
   if (request.network !== "testnet") return { ok: false, error: { code: "mainnet-disabled", message: "Voting is disabled on mainnet during the testnet beta." } }
-  if (!isAddress(request.account)) return { ok: false, error: { code: "invalid-account", message: "The connected account is not a valid address." } }
+  if (!isAddress(request.account, { strict: false })) return { ok: false, error: { code: "invalid-account", message: "The connected account is not a valid address." } }
   const deployment = getDeployment("testnet")
   if (request.to.toLowerCase() !== deployment.contracts.boostVoter.toLowerCase()) return { ok: false, error: { code: "wrong-contract", message: "The call does not target the verified BoostVoter contract." } }
   let args: readonly [bigint, readonly Address[], readonly bigint[]]
@@ -164,23 +179,46 @@ export async function simulateVote(request: { network: string; account: string; 
     return { ok: false, error: { code: "bad-calldata", message: "The calldata does not decode with the verified BoostVoter ABI." } }
   }
   const [tokenId, gauges, weights] = args
+  const structural = voteArgsProblem(gauges, weights)
+  if (structural !== null) return { ok: false, error: { code: "bad-arguments", message: structural } }
+  const client = testnetClient()
+  // Same window margin as preparation: never simulate (and so never enable signing) in the last minutes.
+  const latest = await client.getBlock()
+  const epoch = getEpochInfo(latest.timestamp)
+  if (epoch.phase !== "voting" || epoch.voteEnd - latest.timestamp <= BigInt(VOTE_END_MARGIN_SECONDS)) {
+    return { ok: false, error: { code: "window-closing", message: "The voting window is closed or closes within five minutes, so the vote cannot be sent." } }
+  }
   const position = await readerFor("testnet").readVeMezoPosition(tokenId)
   if (position.owner.toLowerCase() !== request.account.toLowerCase()) return { ok: false, error: { code: "not-owner", message: `veMEZO #${tokenId} is not owned by the connected account.` } }
   if (!position.canVoteThisEpoch) return { ok: false, error: { code: "cannot-vote", message: "This NFT cannot vote right now (already voted or outside the voting window)." } }
+  if (position.votingPower <= 0n) return { ok: false, error: { code: "no-power", message: "This NFT has no voting power." } }
   const sim = await simulate(request.account as Address, tokenId, gauges, weights)
   if (!sim.ok) return { ok: false, error: { code: sim.code, message: sim.message } }
   return { ok: true, blockNumber: sim.blockNumber.toString(), simulatedAt: new Date().toISOString() }
 }
 
-/** Receipt lookup only. A missing receipt is "pending", never "failed". */
-export async function readReceipt(network: string, hash: string): Promise<ReceiptResponse> {
+/**
+ * Receipt lookup only. A missing receipt is "pending", never "failed". Alongside the status it returns
+ * the mined transaction's from, to and input, so the browser can confirm the hash its wallet returned
+ * really is the vote the user reviewed.
+ */
+export async function readReceipt(network: string, hash: string, client: ReceiptClient = testnetClient() as unknown as ReceiptClient): Promise<ReceiptResponse> {
   if (network !== "testnet") return { ok: false, error: { code: "mainnet-disabled", message: "Receipts are tracked on testnet only during the beta." } }
   if (!isHash(hash)) return { ok: false, error: { code: "bad-hash", message: "Not a transaction hash." } }
   try {
-    const receipt = await testnetClient().getTransactionReceipt({ hash })
-    return { ok: true, status: receipt.status === "success" ? "success" : "reverted", blockNumber: receipt.blockNumber.toString(), gasUsed: receipt.gasUsed.toString() }
+    const receipt = await client.getTransactionReceipt({ hash })
+    const tx = await client.getTransaction({ hash })
+    return {
+      ok: true,
+      status: receipt.status === "success" ? "success" : "reverted",
+      blockNumber: receipt.blockNumber.toString(),
+      gasUsed: receipt.gasUsed.toString(),
+      transaction: { from: tx.from, to: tx.to, input: tx.input },
+    }
   } catch (error) {
-    if (error instanceof BaseError && error.name === "TransactionReceiptNotFoundError") return { ok: true, status: "pending", blockNumber: null, gasUsed: null }
+    if (error instanceof BaseError && (error.name === "TransactionReceiptNotFoundError" || error.name === "TransactionNotFoundError")) {
+      return { ok: true, status: "pending", blockNumber: null, gasUsed: null, transaction: null }
+    }
     return { ok: false, error: { code: "receipt-unavailable", message: "The receipt could not be read from the RPC." } }
   }
 }

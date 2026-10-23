@@ -78,6 +78,20 @@ export type SimulateResponse =
   | { readonly ok: true; readonly blockNumber: string; readonly simulatedAt: string }
   | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } }
 
+/** The mined transaction behind a hash, so the browser can check it is the reviewed vote. */
+export interface ReceiptTransaction {
+  readonly from: string
+  readonly to: string | null
+  readonly input: string
+}
+
 export type ReceiptResponse =
-  | { readonly ok: true; readonly status: "pending" | "success" | "reverted"; readonly blockNumber: string | null; readonly gasUsed: string | null }
+  | {
+      readonly ok: true
+      readonly status: "pending" | "success" | "reverted"
+      readonly blockNumber: string | null
+      readonly gasUsed: string | null
+      /** null while the transaction is not yet visible to the RPC. */
+      readonly transaction: ReceiptTransaction | null
+    }
   | { readonly ok: false; readonly error: { readonly code: string; readonly message: string } }

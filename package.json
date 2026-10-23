@@ -15,7 +15,8 @@
     "typecheck": "tsc -p tsconfig.json && npm run build -w @boost-relay/mezo && npm run build -w @boost-relay/optimizer && npm run typecheck -w @boost-relay/web",
     "build": "npm run build -w @boost-relay/mezo && npm run build -w @boost-relay/optimizer && npm run build -w @boost-relay/web",
     "verify:addresses": "tsx scripts/verify-addresses.ts",
-    "verify:boost": "tsx scripts/verify-boost.ts"
+    "verify:boost": "tsx scripts/verify-boost.ts",
+    "verify:vote": "tsx scripts/verify-vote-readiness.ts"
   },
   "engines": {
     "node": ">=20"
