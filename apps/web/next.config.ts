@@ -33,9 +33,14 @@ const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=31536000" },
 ]
 
+/** npm workspaces hoist dependencies to the repository root, two levels above apps/web. */
+const monorepoRoot = path.join(process.cwd(), "..", "..")
+
 const nextConfig: NextConfig = {
-  // npm workspaces hoist dependencies to the repository root.
-  turbopack: { root: path.join(process.cwd(), "..", "..") },
+  turbopack: { root: monorepoRoot },
+  // Trace server functions from the monorepo root so hosted API routes include the hoisted
+  // node_modules and the built workspace packages (@boost-relay/mezo, @boost-relay/optimizer).
+  outputFileTracingRoot: monorepoRoot,
   poweredByHeader: false,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }]
