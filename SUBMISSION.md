@@ -2,11 +2,32 @@
 
 **Boost vote optimizer for Mezo.** Boost Relay shows where veBTC boosts are underpowered and where veMEZO votes sit past the 5x cap, then builds a better `BoostVoter.vote()` allocation that the NFT's owner reviews, simulates and signs with their own wallet.
 
-- **Live site:** https://boost-relay.vercel.app
-- **Boost Market:** https://boost-relay.vercel.app/market (add `?network=testnet` for testnet)
-- **Vote Optimizer, no wallet needed:** https://boost-relay.vercel.app/optimizer?token=91&example=1 (a real public mainnet veMEZO NFT, read-only)
-- **Code:** https://github.com/SavvySID/Boost-Relay
-- **Track fit:** Access & Distribution for MEZO: a tool that makes MEZO's core utility (veMEZO voting and the veBTC boost it drives) easier to use well.
+## At a glance
+
+| | |
+|---|---|
+| Category | Boost vote optimization |
+| TL;DR | Find where veMEZO votes actually raise veBTC boosts, get the best vote split for your NFT, then review and sign it yourself. |
+| Track | **Track 2, Access & Distribution:** a simplified interface that makes MEZO's core utility (veMEZO voting and the veBTC boost it drives) easy to use well. A Track 1 path exists through Vault Relay, which is planned. |
+| Chain | Mezo: Mainnet (chain 31612) for analytics; Testnet (chain 31611) for owner-signed voting |
+| Status | Entirely new, built during the hackathon (all commits from Oct 23, 2026 onward) |
+| Readiness | Live testnet deployment with a real vote verified on-chain; mainnet analytics live and read-only |
+| Live site | https://boost-relay.vercel.app |
+| Try it without a wallet | https://boost-relay.vercel.app/optimizer?token=91&example=1 (a real public mainnet veMEZO NFT, read-only) |
+| Boost Market | https://boost-relay.vercel.app/market (add `?network=testnet` for testnet) |
+| Code | https://github.com/SavvySID/Boost-Relay |
+| Pitch video | https://youtu.be/DX-hQG9_S_M |
+| Project deck | |
+
+### Where to find the evidence for each judging criterion
+
+| Criterion | Evidence |
+|---|---|
+| Mezo integration (30%) | [§4 contracts used](#4-mezo-integration) and [§5 the real on-chain vote](#5-evidence) |
+| Product and business viability (30%) | [§1 problem size](#1-the-problem), [§2 who it's for](#2-who-its-for), [§8 business model](#8-business-model-planned-nothing-is-charged-today) |
+| Technical implementation (20%) | [§5 contract parity and tests](#5-evidence), [§6 architecture](#6-architecture-and-tech-stack), CI on every push |
+| User experience (10%) | [§7](#7-user-experience) and the live site |
+| Submission materials (10%) | This report, the README, the pitch video |
 
 ## 1. The problem
 
@@ -16,7 +37,15 @@ Measured read-only by `npm run verify:boost` on Mezo Mainnet at block 12,786,939
 
 Votes past the cap can still earn incentives or other rewards, so this measures boost efficiency, not lost income.
 
-## 2. What works today (shipped)
+## 2. Who it's for
+
+- **veMEZO holders:** they want each vote to raise a Bitcoin boost instead of piling onto positions already at 5x, and want a plan they can check before signing.
+- **veBTC holders:** they want to see where their position stands and exactly how much more veMEZO it needs for 5x.
+- **Experience level:** intermediate DeFi users who already lock MEZO or BTC on Mezo Earn. Every number is explained in plain language, and nothing needs a wallet until you choose to vote.
+- **Device:** desktop browsers with an injected EVM wallet extension. Analytics and the optimizer also work on mobile; there is no mobile wallet connection yet.
+- **Region:** global. No region-specific features, and it uses public Mezo RPCs only.
+
+## 3. What works today (shipped)
 
 | Feature | Where | Status |
 |---|---|---|
@@ -31,7 +60,9 @@ Votes past the cap can still earn incentives or other rewards, so this measures 
 
 Boost Relay deploys **no smart contract of its own, by design**. Your wallet calls Mezo's own `BoostVoter.vote()` directly, so Boost Relay never holds NFTs, MEZO, BTC or MUSD.
 
-## 3. Mezo integration
+## 4. Mezo integration
+
+MEZO is the core of the product. veMEZO is locked MEZO, and Boost Relay reads every NFT's voting power, optimizes how it votes on Mezo's BoostVoter, and lets the owner sign that vote. MUSD appears today as one of the incentive tokens the market reads from each gauge; posting MUSD incentives is milestone 1 below.
 
 | Contract | Mezo Testnet (31611) | Mezo Mainnet (31612) | Used for |
 |---|---|---|---|
@@ -42,24 +73,6 @@ Boost Relay deploys **no smart contract of its own, by design**. Your wallet cal
 | Multicall3 | `0xca11…ca11` | `0xca11…ca11` | batched reads at one pinned block |
 
 Addresses are taken from the verified sources on Mezo's explorers and re-checked on-chain by `npm run verify:addresses` and `npm run verify:vote`.
-
-## 4. Architecture
-
-```
-Browser (Next.js pages)
-  │  same-origin API only; strict CSP, no direct RPC from the page
-  ▼
-API routes (Next.js on Vercel)          @boost-relay/optimizer (pure, deterministic)
-  /api/market   snapshot at one block ──► strategies that mirror BoostVoter.vote()
-  /api/optimize recommendation           @boost-relay/mezo (read-only data layer)
-  /api/vote/prepare  gates + eth_call ──► exact BoostVoter._getBoost math, Multicall3
-  /api/vote/simulate re-check + eth_call   reads at a pinned block, public Mezo RPCs
-  /api/vote/receipt  receipt + tx check
-  │
-Wallet (injected, EIP-6963) ── signs vote() directly to Mezo's BoostVoter (testnet only)
-```
-
-The server has no wallet client, keys or signing code; a unit test enforces this. Every vote is signed in the owner's own browser wallet.
 
 ## 5. Evidence
 
@@ -83,7 +96,7 @@ The server has no wallet client, keys or signing code; a unit test enforces this
 
 Pinned fixtures from both networks (`packages/mezo/test/fixtures/`) keep this parity in the unit tests. They cover capped, partial, unvoted and zero-power positions, and check that one wei less than the computed 5x minimum falls short.
 
-### Tests (2026-10-26, this version)
+### Tests (2026-10-27)
 
 - **Unit and integration (offline, `npm test`):** 183 tests in 15 files. They cover:
   - boost math and contract parity;
@@ -91,8 +104,8 @@ Pinned fixtures from both networks (`packages/mezo/test/fixtures/`) keep this pa
   - API input validation, rate limits and error sanitising;
   - the wallet flow with mocked wallets: rejections, reverts, a wrong transaction behind a hash, unknown receipts, double clicks;
   - the post-vote check, which never claims success from a receipt alone.
-- **TypeScript strict typecheck and production build:** pass.
-- **Browser suites, headless Edge, mock wallets only, run against a local production build: 153 checks.**
+- **CI on GitHub runs on every push:** install, tests, strict typecheck and production build, from a clean checkout.
+- **Browser suites, headless Edge, mock wallets only: 153 checks, run against both a local production build and the live deployment.**
 
   | Suite | Checks |
   |---|---|
@@ -104,13 +117,59 @@ Pinned fixtures from both networks (`packages/mezo/test/fixtures/`) keep this pa
   They cover 320 to 1440 px layouts, no wallet prompt on load, CSP with zero violations, and same-origin requests only. No suite signs or sends anything.
 - **Read-only readiness check (`npm run verify:vote -- --token <id>`):** checks chain ids and contract code on both networks, a fresh snapshot, the token's state against direct contract reads, and `eth_call` as the owner and as a non-owner.
 
-## 6. Business model (planned, nothing is charged today)
+## 6. Architecture and tech stack
+
+```
+Browser (Next.js pages)
+  │  same-origin API only; strict CSP, no direct RPC from the page
+  ▼
+API routes (Next.js on Vercel)          @boost-relay/optimizer (pure, deterministic)
+  /api/market   snapshot at one block ──► strategies that mirror BoostVoter.vote()
+  /api/optimize recommendation           @boost-relay/mezo (read-only data layer)
+  /api/vote/prepare  gates + eth_call ──► exact BoostVoter._getBoost math, Multicall3
+  /api/vote/simulate re-check + eth_call   reads at a pinned block, public Mezo RPCs
+  /api/vote/receipt  receipt + tx check
+  │
+Wallet (injected, EIP-6963) ── signs vote() directly to Mezo's BoostVoter (testnet only)
+```
+
+The server has no wallet client, keys or signing code; a unit test enforces this. Every vote is signed in the owner's own browser wallet.
+
+**Tech stack:**
+- **Frontend and API:** Next.js 16 (App Router), React 19, TypeScript (strict), Tailwind CSS 4.
+- **Chain access:** viem, using Mezo's verified contract ABIs, Multicall3, and the public Mezo RPCs.
+- **Wallets:** injected browser wallets over EIP-1193, discovered with EIP-6963. No wallet SDK, and no keys on the server.
+- **Packages (npm workspaces):** `@boost-relay/mezo` (data layer and exact boost math) and `@boost-relay/optimizer` (strategies).
+- **Testing:** Vitest for unit tests, headless Edge for browser suites, Foundry `cast` for read-only on-chain checks.
+- **Hosting and CI:** Vercel and GitHub Actions.
+
+## 7. User experience
+
+- **No wallet needed to explore:** the market, the optimizer and three one-click real examples all work without connecting anything.
+- **Plain-language states for every outcome:** loading, partial or out-of-date data, an unavailable RPC, wrong network, rejected, reverted, receipt unknown, confirmed and verified on-chain.
+- **Clear steps before signing:**
+  - the exact call, the estimated fee and each gauge's share;
+  - a short acknowledgement;
+  - a two-minute expiry, so a stale plan can't be signed.
+- **Accessible on any screen:** responsive from 320 px, keyboard-accessible navigation and FAQ, visible focus, reduced-motion support.
+
+## 8. Business model (planned, nothing is charged today)
 
 - **Free:** the Boost Market and the Vote Optimizer stay free. That's the funnel.
 - **Paid boost alerts for veBTC holders:** "your boost dropped below 5x; you need X more veMEZO to get back".
 - **Later:** if Vault Relay ships, a small fee on the rewards it compounds.
 
-## 7. Known limitations (honest)
+## 9. Milestones
+
+| Milestone | Target | What ships |
+|---|---|---|
+| 1. MUSD/MEZO incentives | Wave 2 (Nov 2 to 15, 2026) | veBTC holders post MUSD, MEZO or BTC incentives to their gauge from the Boost Market, and an incentive-aware optimizer strategy earns the most without wasting boost. Testnet first. |
+| 2. Boost alerts | Late Nov to Dec 2026 | Alerts when a veBTC position slips below 5x, with the exact veMEZO needed. This is the first paid product. |
+| 3. Vault Relay prototype and mainnet voting | Q1 2027 | A testnet vault that votes pooled veMEZO with the optimizer, if the Mezo team grants a managed veNFT. Mainnet voting after a dedicated security review. |
+
+These are plans, not commitments. Vault Relay depends on the Mezo team's managed-veNFT approval.
+
+## 10. Known limitations (honest)
 
 - **Voting:** submitting votes is a Mezo Testnet beta; mainnet is analytics only.
 - **Wallets:** injected browser wallets only. There's no WalletConnect, mobile deep link or delegated voting.
@@ -120,15 +179,11 @@ Pinned fixtures from both networks (`packages/mezo/test/fixtures/`) keep this pa
 - **No historical charts:** reliable history would need an indexer, and the public RPC caps log queries. Every number is a single-block snapshot with its block and age shown.
 - **Vault Relay is research only.** Pooled voting needs a MANAGED veNFT, which the Mezo team must grant.
 
-## 8. Next (Wave 2, not part of this submission)
+## 11. Team
 
-- MUSD (and MEZO/BTC) incentive posting for veBTC holders.
-- An incentive-aware optimizer strategy.
-- A small pass-through incentive router contract.
-- Boost alerts.
-- Vault Relay, if the Mezo team grants a managed veNFT.
+Solo builder: **SavvySID** ([GitHub](https://github.com/SavvySID)). Covers product, design, frontend, backend and on-chain integration. Contact links are on the AKINDO submission page.
 
-## 9. Verify it yourself
+## 12. Verify it yourself
 
 ```bash
 npm ci

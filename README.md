@@ -9,6 +9,7 @@
 | Live site | https://boost-relay.vercel.app |
 | Boost Market | https://boost-relay.vercel.app/market |
 | Vote Optimizer, no wallet needed | https://boost-relay.vercel.app/optimizer?token=91&example=1 |
+| Demo video | https://youtu.be/DX-hQG9_S_M |
 | Submission report (problem, evidence, limitations) | [SUBMISSION.md](SUBMISSION.md) |
 
 ![Boost Relay homepage with the live boost chart](docs/screenshots/home.png)
