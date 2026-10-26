@@ -1,11 +1,16 @@
 import type { MarketDto, MarketServed } from "@/lib/market-dto"
-import { integer, utcDateTime } from "@/lib/market-formatting"
+import { integer, relativeAge, utcDateTime } from "@/lib/market-formatting"
 
-/** Partial-snapshot warning, re-served snapshot notice, and refresh failures. Renders nothing when none apply. */
-export function SnapshotNotices({ data, served, refreshError }: { readonly data: MarketDto; readonly served: MarketServed; readonly refreshError: string | null }) {
+/** A snapshot whose block is older than this is flagged: power decays and other votes move. */
+export const STALE_SNAPSHOT_SECONDS = 300
+
+/** Partial-snapshot warning, out-of-date warning, re-served snapshot notice, and refresh failures. Renders nothing when none apply. */
+export function SnapshotNotices(props: { readonly data: MarketDto; readonly served: MarketServed; readonly refreshError: string | null; readonly now: number }) {
+  const { data, served, refreshError } = props
   const { meta } = data
   const partial = meta.completeness === "partial"
-  if (refreshError === null && !partial && served.source !== "cache") return null
+  const stale = props.now / 1000 - Number(meta.blockTimestamp) > STALE_SNAPSHOT_SECONDS
+  if (refreshError === null && !partial && !stale && served.source !== "cache") return null
   return (
     <div className="grid gap-2">
       {refreshError !== null ? (
@@ -27,6 +32,12 @@ export function SnapshotNotices({ data, served, refreshError }: { readonly data:
             ))}
           </ul>
         </details>
+      ) : null}
+      {stale ? (
+        <p role="status" className="rounded-[var(--radius-md)] bg-warn-bg px-4 py-3 text-sm text-warn-fg">
+          <span className="font-medium">This snapshot may be out of date.</span> Block {integer(meta.blockNumber)} was produced {relativeAge(meta.blockTimestamp, props.now)}; voting
+          power decays and other voters act, so use Refresh before relying on these numbers.
+        </p>
       ) : null}
       {served.source === "cache" ? (
         <p className="text-xs text-fg-3">

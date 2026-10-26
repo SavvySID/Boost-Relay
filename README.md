@@ -1,6 +1,34 @@
 # Boost Relay
 
-Non-custodial analytics for Mezo Earn's boost market: which veBTC positions are over-boosted, under-boosted or unboosted, and the exact veMEZO vote weight each one needs to reach 2x, 3x or 5x.
+[![CI](https://github.com/SavvySID/Boost-Relay/actions/workflows/ci.yml/badge.svg)](https://github.com/SavvySID/Boost-Relay/actions/workflows/ci.yml)
+
+**Boost vote optimizer for Mezo.** See where veBTC boosts are underpowered and where veMEZO votes are wasted past the 5x cap, then build, simulate and sign a better `BoostVoter.vote()` with your own wallet. Non-custodial: no contract of ours sits between your wallet and Mezo.
+
+| | |
+|---|---|
+| Live site | https://boost-relay.vercel.app |
+| Boost Market | https://boost-relay.vercel.app/market |
+| Vote Optimizer, no wallet needed | https://boost-relay.vercel.app/optimizer?token=91&example=1 |
+| Submission report (problem, evidence, limitations) | [SUBMISSION.md](SUBMISSION.md) |
+
+![Boost Relay homepage with the live boost chart](docs/screenshots/home.png)
+
+## For judges: what's proven
+
+- **A real vote, signed with an installed wallet** on Mezo Testnet: [`0xaf10ea12…1911b`](https://explorer.test.mezo.org/tx/0xaf10ea12eda1afc7be212b388e2166560c0b96c37254ec365f6a97af31e1911b) (block 16,383,013). It decodes to `vote(924, [veBTC #503's gauge], [89.71 veMEZO])`, and BoostVoter now records exactly that. See [SUBMISSION.md](SUBMISSION.md#5-evidence).
+- **The boost math equals the contract:** local formula = on-chain `getBoost` for 293/293 mainnet and 530/530 testnet positions (blocks 12,786,939 and 16,388,163). Pinned fixtures from both networks keep it in CI.
+- **Tested:** 183 offline unit and integration tests, and 153 browser checks against a production build using mock wallets only. Strict TypeScript and the production build pass in CI.
+- **What the optimizer improves is visible:** before/after boosted power, positions at 5x, each gauge's share and both strategies side by side, all labelled as projections.
+
+| Where a vote helps | Projected outcome of a plan |
+|---|---|
+| ![Boost Market sorted by closest to 5x](docs/screenshots/market-closest-to-5x.png) | ![Vote Optimizer projected outcome for a mainnet example](docs/screenshots/optimizer-projected-outcome.png) |
+
+**Networks:** Mezo Mainnet is analytics only. Mezo Testnet adds owner-signed voting. Mainnet voting is disabled on the server, not just in the UI.
+
+**Business model (planned; nothing is charged today):** the market and optimizer stay free. Paid boost alerts for veBTC holders would follow, and a vault fee if Vault Relay ships.
+
+## What's in this repository
 
 This repository contains:
 
@@ -242,6 +270,8 @@ Minimum weight for a target `b`: `vRneed = ceil((b − 1e18)·1e18 / (4·bR))`, 
 | Mainnet block 12,694,524: local boost vs `getBoost()` | 294/294 exact; minimum-weight self-check 495/495 |
 | Same block: veMEZO weight above the 5x requirement on live positions | 17,506,532 of 59,533,214 (29.406%) |
 | Testnet block 16,307,502: local boost vs `getBoost()` | 519/519 exact; self-check 381/381 |
+| Mainnet block 12,786,939 (2026-10-26): local boost vs `getBoost()` | 293/293 exact; self-check 501/501; 23.27% of live weight above the 5x requirement |
+| Testnet block 16,388,163 (2026-10-26): local boost vs `getBoost()` | 530/530 exact; self-check 414/414 (pinned as a test fixture) |
 
 "Above the 5x requirement" means weight that adds no boost to its target at that block. Voters may still earn incentives or off-chain rewards for it.
 
@@ -251,5 +281,6 @@ Minimum weight for a target `b`: `vRneed = ceil((b − 1e18)·1e18 / (4·bR))`, 
 - Rewards paid through Mezo's off-chain "Academy" program are not visible on-chain and are not included.
 - Mezo can upgrade its proxies; `verify:addresses` warns if an implementation slot changes.
 - Public RPCs: `eth_getLogs` is capped at 10,000 blocks, so the reader scans state rather than events. Heavy views (`getBoost`) use small chunks.
+- The public Mezo Testnet RPC is load-balanced, and some nodes briefly answer "not found" for mined transactions. Receipt lookups retry, and an unread receipt is shown as unknown, never as success.
 - Voting is a testnet beta for injected browser wallets only. There is no WalletConnect or mobile deep link, and no delegated operators.
 - A passing simulation is not a guarantee: weights and power can change before the transaction is included.

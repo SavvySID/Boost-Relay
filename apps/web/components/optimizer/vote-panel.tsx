@@ -3,8 +3,9 @@
 import { mezoTestnet } from "@boost-relay/mezo/chains"
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import type { NetworkName } from "@/lib/market-dto"
-import { amount, boost, integer, relativeAge, short, utcDateTime } from "@/lib/market-formatting"
+import { amount, boost, integer, relativeAge, satsFromWei, short, utcDateTime } from "@/lib/market-formatting"
 import type { OptimizerDto, RecommendationDto } from "@/lib/optimizer-dto"
+import { checkRecordedVote } from "@/lib/post-vote"
 import { chip, ui } from "@/lib/ui"
 import { ACKNOWLEDGEMENTS } from "@/lib/vote-copy"
 import type { PreparedVote, VoteGate } from "@/lib/vote-dto"
@@ -399,6 +400,7 @@ export function VotePanel(props: {
         <div className="grid gap-3">
           <Notice tone="success" title={`Vote confirmed for veMEZO #${flow.prepared.tokenId}${flow.blockNumber ? ` in block ${integer(flow.blockNumber)}` : ""}`}>
             <TxLink hash={flow.hash} />
+            {flow.kind === "confirmed" ? <RecordedVote prepared={flow.prepared} data={data} /> : null}
             <p className="mt-2">
               {flow.kind === "confirmed" ? "The token card and recommendation above were re-read from the chain after the vote. " : ""}
               Live boost reflects the vote; the boost applied to each veBTC stays as it was until someone calls the permissionless pokeBoost. No incentive amount or
@@ -414,6 +416,27 @@ export function VotePanel(props: {
       ) : null}
     </section>
   )
+}
+
+/** One weight's share of the vote, from the weights themselves (they are relative in vote()). */
+function sharePercent(weights: readonly string[], i: number): string {
+  const total = weights.reduce((s, w) => s + BigInt(w), 0n)
+  if (total === 0n) return "0%"
+  return `${(Number((BigInt(weights[i] ?? "0") * 10_000n) / total) / 100).toFixed(1)}%`
+}
+
+/** What BoostVoter records after the vote, re-read from the chain (never inferred from the receipt alone). */
+function RecordedVote({ prepared, data }: { readonly prepared: PreparedVote; readonly data: OptimizerDto }) {
+  const check = checkRecordedVote(prepared, data)
+  if (check.status === "verified") {
+    return (
+      <p className="mt-2 font-medium">
+        Verified on-chain at block {integer(check.block)}: BoostVoter records this NFT&apos;s vote on {check.gauges} {check.gauges === 1 ? "gauge" : "gauges"} (
+        {amount(check.totalVotes, 18, 4)} veMEZO), the gauges you signed.
+      </p>
+    )
+  }
+  return <p className="mt-2">{check.status === "different" ? <span className="font-medium">{check.reason}</span> : `${check.reason} Use Recalculate in a moment.`}</p>
 }
 
 function ReviewStage(props: {
@@ -458,6 +481,18 @@ function ReviewStage(props: {
         <Row label="Simulated">
           As your account at block {integer(p.simulation.blockNumber)}; data from block {integer(p.sourceBlock)}
         </Row>
+        <Row label="Estimated network fee">
+          {p.feeEstimate === null ? (
+            <span className="text-fg-2">Unavailable; your wallet shows the fee before you sign</span>
+          ) : (
+            <>
+              about {satsFromWei(p.feeEstimate.fee)}{" "}
+              <span className="font-normal text-fg-3">
+                ({integer(p.feeEstimate.gas)} gas; your wallet shows the final fee)
+              </span>
+            </>
+          )}
+        </Row>
       </dl>
 
       <div>
@@ -474,7 +509,7 @@ function ReviewStage(props: {
                 <span className="num text-fg-2 sm:text-right">
                   weight <span className="font-medium text-fg">{p.weights[i]}</span>
                   <span className="block text-xs text-fg-3">
-                    = {amount(p.weights[i] ?? "0", 18, 4)} veMEZO
+                    = {amount(p.weights[i] ?? "0", 18, 4)} veMEZO ({sharePercent(p.weights, i)} of this vote)
                     {line ? `; projected live boost ${boost(line.currentBoost)} to ${boost(line.projectedBoost)}` : ""}
                   </span>
                 </span>

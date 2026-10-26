@@ -20,7 +20,7 @@ export function Hero() {
         <div>
           <p className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-fg-2">
             <span aria-hidden="true" className="size-1.5 rounded-full bg-accent" />
-            Mezo Earn analytics
+            Boost vote optimizer for Mezo
           </p>
           <h1 id="hero-title" className="mt-6 text-[clamp(2.6rem,5.6vw,4.25rem)] font-medium leading-[1] tracking-[-0.04em] text-balance text-fg">
             Make every veMEZO vote count.

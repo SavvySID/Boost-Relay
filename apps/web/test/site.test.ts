@@ -54,10 +54,10 @@ describe("site navigation", () => {
 })
 
 describe("FAQ content", () => {
-  it("has twelve distinct questions", () => {
-    expect(FAQ).toHaveLength(12)
-    expect(new Set(FAQ.map((f) => f.id)).size).toBe(12)
-    expect(new Set(FAQ.map((f) => f.question)).size).toBe(12)
+  it("has thirteen distinct questions", () => {
+    expect(FAQ).toHaveLength(13)
+    expect(new Set(FAQ.map((f) => f.id)).size).toBe(13)
+    expect(new Set(FAQ.map((f) => f.question)).size).toBe(13)
   })
 
   it("is explicit about what is not live or not guaranteed", () => {
@@ -71,6 +71,8 @@ describe("FAQ content", () => {
     expect(answer("advice")).toMatch(/^No\./)
     expect(answer("applied")).toMatch(/does not call that update/)
     expect(answer("above-cap")).toMatch(/^Not necessarily/)
+    expect(answer("business")).toMatch(/not live/)
+    expect(answer("business")).toMatch(/no fee and no token/)
   })
 })
 

@@ -95,6 +95,20 @@ async function simulate(account: Address, tokenId: bigint, gauges: readonly Addr
   }
 }
 
+/** Read-only gas estimate for the exact call as the account. A failure only hides the estimate. */
+async function estimateFee(account: Address, tokenId: bigint, gauges: readonly Address[], weights: readonly bigint[]): Promise<{ gas: string; gasPrice: string; fee: string } | null> {
+  try {
+    const client = testnetClient()
+    const [gas, gasPrice] = await Promise.all([
+      client.estimateContractGas({ address: getDeployment("testnet").contracts.boostVoter, abi: boostVoterAbi, functionName: "vote", args: [tokenId, [...gauges], [...weights]], account }),
+      client.getGasPrice(),
+    ])
+    return { gas: gas.toString(), gasPrice: gasPrice.toString(), fee: (gas * gasPrice).toString() }
+  } catch {
+    return null
+  }
+}
+
 /**
  * Fresh snapshot, fresh NFT state, recomputed recommendation, gates, then a simulation as the
  * connected account. Returns a description of the call; nothing is signed or sent here.
@@ -131,6 +145,7 @@ export async function prepareVote(params: { network: "mainnet" | "testnet"; toke
   const call = rec.voteCall
   const sim = await simulate(account, call.tokenId, call.gauges, call.weights)
   if (!sim.ok) return { ok: false, error: { code: sim.code, message: `Simulation failed: ${sim.message}` }, gates }
+  const feeEstimate = await estimateFee(account, call.tokenId, call.gauges, call.weights)
 
   const tokenByGauge = new Map(snapshot.positions.map((p) => [p.gauge.toLowerCase(), p.tokenId.toString()]))
   const now = Date.now()
@@ -157,6 +172,7 @@ export async function prepareVote(params: { network: "mainnet" | "testnet"; toke
       preparedAt: new Date(now).toISOString(),
       expiresAt: new Date(now + PREPARED_TTL_MS).toISOString(),
       simulation: { ok: true, blockNumber: sim.blockNumber.toString(), simulatedAt: new Date().toISOString() },
+      feeEstimate,
       gates,
       recommendation: { ...stringifyBigints(rec), calldata: null },
       existingVotes: allocation.entries.map((e) => ({ gauge: e.gauge, tokenId: tokenByGauge.get(e.gauge.toLowerCase()) ?? null, votes: e.votes.toString() })),
@@ -202,12 +218,32 @@ export async function simulateVote(request: { network: string; account: string; 
  * the mined transaction's from, to and input, so the browser can confirm the hash its wallet returned
  * really is the vote the user reviewed.
  */
-export async function readReceipt(network: string, hash: string, client: ReceiptClient = testnetClient() as unknown as ReceiptClient): Promise<ReceiptResponse> {
+export async function readReceipt(
+  network: string,
+  hash: string,
+  client: ReceiptClient = testnetClient() as unknown as ReceiptClient,
+  options: { readonly attempts?: number; readonly delayMs?: number } = {},
+): Promise<ReceiptResponse> {
   if (network !== "testnet") return { ok: false, error: { code: "mainnet-disabled", message: "Receipts are tracked on testnet only during the beta." } }
   if (!isHash(hash)) return { ok: false, error: { code: "bad-hash", message: "Not a transaction hash." } }
+  // The public Mezo Testnet RPC is load-balanced and some nodes briefly answer "not found" for
+  // transactions that are already mined, so a miss is retried a couple of times before it counts as pending.
+  const attempts = options.attempts ?? 3
+  const delayMs = options.delayMs ?? 300
+  const retryNotFound = async <T,>(read: () => Promise<T>): Promise<T> => {
+    for (let i = 1; ; i++) {
+      try {
+        return await read()
+      } catch (error) {
+        const notFound = error instanceof BaseError && (error.name === "TransactionReceiptNotFoundError" || error.name === "TransactionNotFoundError")
+        if (!notFound || i >= attempts) throw error
+        await new Promise((r) => setTimeout(r, delayMs))
+      }
+    }
+  }
   try {
-    const receipt = await client.getTransactionReceipt({ hash })
-    const tx = await client.getTransaction({ hash })
+    const receipt = await retryNotFound(() => client.getTransactionReceipt({ hash }))
+    const tx = await retryNotFound(() => client.getTransaction({ hash }))
     return {
       ok: true,
       status: receipt.status === "success" ? "success" : "reverted",

@@ -251,39 +251,56 @@ describe("summarizeMarket", () => {
   })
 })
 
-describe("real mainnet fixture (captured read-only at a pinned block by scripts/verify-boost.ts)", () => {
-  interface Fixture {
-    source: { network: string; blockNumber: string; boostVoter: string }
-    global: { totalVeMezoVotingPower: string; totalUnboostedVeBtcVotingPower: string }
-    positions: { tokenId: string; gaugeWeight: string; unboostedVotingPower: string; storedBoostRaw: string; onchainBoost: string }[]
-  }
-  const fixture = JSON.parse(
-    readFileSync(new URL("./fixtures/mainnet-12694524.json", import.meta.url), "utf8"),
-  ) as Fixture
+interface ParityFixture {
+  source: { network: string; blockNumber: string; boostVoter: string }
+  global: { totalVeMezoVotingPower: string; totalUnboostedVeBtcVotingPower: string }
+  positions: { tokenId: string; gaugeWeight: string; unboostedVotingPower: string; storedBoostRaw: string; onchainBoost: string }[]
+}
 
-  it("comes from mainnet block 12,694,524", () => {
-    expect(fixture.source.network).toBe("mainnet")
-    expect(fixture.source.blockNumber).toBe("12694524")
-    expect(fixture.positions.length).toBeGreaterThanOrEqual(30)
-  })
+/** Real fixtures captured read-only at pinned blocks by scripts/verify-boost.ts: inputs plus the contract's own getBoost answer. */
+const PARITY_FIXTURES = [
+  { network: "mainnet", block: "12694524", file: "./fixtures/mainnet-12694524.json" },
+  { network: "testnet", block: "16388163", file: "./fixtures/testnet-16388163.json" },
+] as const
 
-  it("reproduces BoostVoter.getBoost() for every captured position", () => {
-    for (const p of fixture.positions) {
-      const boost = computeBoost({
-        gaugeWeight: BigInt(p.gaugeWeight),
-        totalVeMezoVotingPower: BigInt(fixture.global.totalVeMezoVotingPower),
-        totalUnboostedVeBtcVotingPower: BigInt(fixture.global.totalUnboostedVeBtcVotingPower),
-        positionUnboostedVotingPower: BigInt(p.unboostedVotingPower),
-      })
-      expect({ tokenId: p.tokenId, boost }).toEqual({ tokenId: p.tokenId, boost: BigInt(p.onchainBoost) })
-    }
-  })
+for (const spec of PARITY_FIXTURES) {
+  describe(`real ${spec.network} fixture at block ${spec.block} (BoostVoter.getBoost parity)`, () => {
+    const fixture = JSON.parse(readFileSync(new URL(spec.file, import.meta.url), "utf8")) as ParityFixture
+    const Tm = BigInt(fixture.global.totalVeMezoVotingPower)
+    const Tb = BigInt(fixture.global.totalUnboostedVeBtcVotingPower)
+    const ctx = (power: string) => ({ totalVeMezoVotingPower: Tm, totalUnboostedVeBtcVotingPower: Tb, positionUnboostedVotingPower: BigInt(power) })
 
-  it("covers capped, partial, unvoted and zero-power positions", () => {
-    const boosts = fixture.positions.map((p) => BigInt(p.onchainBoost))
-    expect(boosts.some((b) => b === MAX_BOOST)).toBe(true)
-    expect(boosts.some((b) => b > P && b < MAX_BOOST)).toBe(true)
-    expect(fixture.positions.some((p) => p.gaugeWeight === "0")).toBe(true)
-    expect(fixture.positions.some((p) => p.unboostedVotingPower === "0")).toBe(true)
+    it("comes from the pinned block on the right network", () => {
+      expect(fixture.source.network).toBe(spec.network)
+      expect(fixture.source.blockNumber).toBe(spec.block)
+      expect(fixture.positions.length).toBeGreaterThanOrEqual(30)
+    })
+
+    it("reproduces BoostVoter.getBoost() for every captured position", () => {
+      for (const p of fixture.positions) {
+        const boost = computeBoost({ gaugeWeight: BigInt(p.gaugeWeight), ...ctx(p.unboostedVotingPower) })
+        expect({ tokenId: p.tokenId, boost }).toEqual({ tokenId: p.tokenId, boost: BigInt(p.onchainBoost) })
+      }
+    })
+
+    it("covers capped, partial, unvoted and zero-power positions", () => {
+      const boosts = fixture.positions.map((p) => BigInt(p.onchainBoost))
+      expect(boosts.some((b) => b === MAX_BOOST)).toBe(true)
+      expect(boosts.some((b) => b > P && b < MAX_BOOST)).toBe(true)
+      expect(fixture.positions.some((p) => p.gaugeWeight === "0")).toBe(true)
+      expect(fixture.positions.some((p) => p.unboostedVotingPower === "0")).toBe(true)
+    })
+
+    it("needs exactly the minimum weight for 5x on every reachable position (one wei less falls short)", () => {
+      let checked = 0
+      for (const p of fixture.positions) {
+        const r = requiredWeightForBoost(MAX_BOOST, ctx(p.unboostedVotingPower))
+        if (!r.reachable || r.requiredWeight === 0n) continue
+        expect(computeBoost({ gaugeWeight: r.requiredWeight, ...ctx(p.unboostedVotingPower) })).toBe(MAX_BOOST)
+        expect(computeBoost({ gaugeWeight: r.requiredWeight - 1n, ...ctx(p.unboostedVotingPower) })).toBeLessThan(MAX_BOOST)
+        checked++
+      }
+      expect(checked).toBeGreaterThan(0)
+    })
   })
-})
+}

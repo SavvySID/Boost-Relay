@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react"
 import { amount, boost, integer, short } from "@/lib/market-formatting"
 import type { OptimizerDto, RecommendationDto } from "@/lib/optimizer-dto"
+import { compareOutcome } from "@/lib/optimizer-outcome"
 import { chip, ui } from "@/lib/ui"
 import type { Strategy } from "./strategy-selector"
 
@@ -51,25 +52,140 @@ const STATUS = {
   blocked: { tone: "danger" as const, title: "No recommendation", text: "A requirement for a trustworthy recommendation is missing." },
 }
 
-function Tradeoff({ data }: { readonly data: OptimizerDto }) {
-  const a = data.recommendations["max-boosted-power"].summary
-  const b = data.recommendations["max-capped-positions"].summary
-  if (a === null || b === null) return null
-  const diff = BigInt(a.boostedPowerChange) - BigInt(b.boostedPowerChange)
+function percentBps(v: number): string {
+  return `${(v / 100).toFixed(v > 0 && v < 10 ? 2 : 1)}%`
+}
+
+function Change({ value }: { readonly value: number }) {
+  if (value === 0) return <span className="text-fg-3">no change</span>
+  return <span className={value > 0 ? "font-medium text-success-fg" : "font-medium text-danger-fg"}>{value > 0 ? `+${integer(value)}` : `-${integer(-value)}`}</span>
+}
+
+/** Before -> after numbers for the selected plan. Projections at the source block, never confirmed results. */
+function Outcome({ data, rec }: { readonly data: OptimizerDto; readonly rec: RecommendationDto }) {
+  const c = compareOutcome(rec, data.candidateMarket.atCap ?? null)
+  const s = rec.summary
+  if (c === null || s === null) return null
+  const rows: { label: string; note: string; before: ReactNode; after: ReactNode; change: ReactNode }[] = [
+    {
+      label: "Boosted veBTC power",
+      note: `Unboosted power x live boost, summed over the ${c.affected} ${c.affected === 1 ? "position" : "positions"} this vote touches.`,
+      before: vemezo(c.boostedBefore.toString()),
+      after: vemezo(c.boostedAfter.toString()),
+      change: (
+        <span className={c.boostedChange > 0n ? "font-medium text-success-fg" : c.boostedChange < 0n ? "font-medium text-danger-fg" : "text-fg-3"}>
+          {c.boostedChange === 0n ? "no change" : signed(c.boostedChange.toString())}
+          {c.boostedChangeBps !== null && c.boostedChange !== 0n ? ` (${c.boostedChange > 0n ? "+" : ""}${percentBps(c.boostedChangeBps)})` : ""}
+        </span>
+      ),
+    },
+    {
+      label: "At 5x, positions this vote touches",
+      note: "Includes positions that lose votes this NFT currently gives them.",
+      before: `${c.affectedAtCapBefore} of ${c.affected}`,
+      after: `${c.affectedAtCapAfter} of ${c.affected}`,
+      change: <Change value={c.affectedAtCapAfter - c.affectedAtCapBefore} />,
+    },
+  ]
+  if (c.marketAtCapBefore !== null && c.marketAtCapAfter !== null) {
+    rows.push({
+      label: "At 5x, whole market",
+      note: `Active positions at the cap, of ${integer(data.candidateMarket.activePositions)} active.`,
+      before: integer(c.marketAtCapBefore),
+      after: integer(c.marketAtCapAfter),
+      change: <Change value={c.marketAtCapAfter - c.marketAtCapBefore} />,
+    })
+  }
   return (
-    <p className="text-sm leading-relaxed text-fg-2">
-      <span className="font-medium text-fg">How the strategies differ for this NFT: </span>
-      {data.strategies["max-boosted-power"].label} uses {a.gaugesUsed} {a.gaugesUsed === 1 ? "gauge" : "gauges"}, takes {a.positionsReaching5x} to 5x and puts{" "}
-      {vemezo(a.excessAbove5x)} veMEZO past caps. {data.strategies["max-capped-positions"].label} uses {b.gaugesUsed}{" "}
-      {b.gaugesUsed === 1 ? "gauge" : "gauges"}, takes {b.positionsReaching5x} to 5x and puts {vemezo(b.excessAbove5x)} past caps.{" "}
-      {diff === 0n
-        ? "Their boosted-power gain is identical, because both keep all power below a cap."
-        : `Boosted-power gain is ${vemezo((diff < 0n ? -diff : diff).toString())} higher with ${diff > 0n ? data.strategies["max-boosted-power"].label : data.strategies["max-capped-positions"].label}.`}
-    </p>
+    <div>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="text-sm font-medium text-fg">Projected outcome</h4>
+        <p className="text-xs text-fg-3">At block {integer(data.sourceBlock)} with BoostVoter&apos;s formula. A projection, not a confirmed result.</p>
+      </div>
+      <dl className="mt-2 divide-y divide-line rounded-[var(--radius-md)] border border-line">
+        <div className="hidden grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))] gap-3 bg-subtle px-4 py-2 text-xs text-fg-3 sm:grid">
+          <span>Measure</span>
+          <span className="text-right">Now</span>
+          <span className="text-right">After this vote</span>
+          <span className="text-right">Change</span>
+        </div>
+        {rows.map((r) => (
+          <div key={r.label} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 px-4 py-3 text-sm sm:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))] sm:items-center">
+            <dt className="min-w-0">
+              <span className="text-fg">{r.label}</span>
+              <span className="block text-xs leading-snug text-fg-3">{r.note}</span>
+            </dt>
+            <dd className="num text-right text-fg-2 max-sm:col-start-2 max-sm:row-start-1">
+              <span className="sm:hidden">
+                {r.before} <span className="text-fg-3">to</span> <span className="font-medium text-fg">{r.after}</span>
+              </span>
+              <span className="hidden sm:inline">{r.before}</span>
+            </dd>
+            <dd className="num hidden text-right font-medium text-fg sm:block">{r.after}</dd>
+            <dd className="num text-right text-xs max-sm:col-span-2 sm:text-sm">{r.change}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="num mt-2 text-xs leading-relaxed text-fg-3">
+        Voting power: {vemezo(c.votesUsed.toString())} of {vemezo(c.votingPower.toString())} veMEZO allocated across {s.gaugesUsed} of {s.maxGauges} allowed gauges;{" "}
+        {c.unused === 0n ? "nothing left unallocated." : `${vemezo(c.unused.toString())} left unallocated by vote()'s integer rounding.`}{" "}
+        {s.excessAbove5x === "0" ? "No votes land past a 5x cap." : `${vemezo(s.excessAbove5x)} veMEZO lands past a 5x cap (adds no boost there).`}
+      </p>
+    </div>
+  )
+}
+
+/** Both strategies side by side for this NFT, with the selected one marked. */
+function StrategyComparison({ data, strategy }: { readonly data: OptimizerDto; readonly strategy: Strategy }) {
+  const ids = ["max-boosted-power", "max-capped-positions"] as const
+  const sums = ids.map((id) => data.recommendations[id].summary)
+  const [a, b] = sums
+  if (a === null || b === null || a === undefined || b === undefined) return null
+  const rows: { label: string; values: [ReactNode, ReactNode] }[] = [
+    { label: "Gauges used", values: [`${a.gaugesUsed}`, `${b.gaugesUsed}`] },
+    { label: "Positions taken to 5x", values: [integer(a.positionsReaching5x), integer(b.positionsReaching5x)] },
+    { label: "Boosted power gain", values: [signed(a.boostedPowerChange), signed(b.boostedPowerChange)] },
+    { label: "Votes past a 5x cap", values: [vemezo(a.excessAbove5x), vemezo(b.excessAbove5x)] },
+  ]
+  return (
+    <div>
+      <h4 className="text-sm font-medium text-fg">Both strategies for this NFT</h4>
+      <div className="mt-2 overflow-hidden rounded-[var(--radius-md)] border border-line">
+        <table className="w-full table-fixed text-sm">
+          <caption className="sr-only">The two optimizer strategies compared for this NFT at the same block</caption>
+          <thead className="bg-subtle text-left text-xs text-fg-3">
+            <tr>
+              <th scope="col" className="w-[38%] px-3 py-2 font-medium sm:px-4">Measure</th>
+              {ids.map((id) => (
+                <th key={id} scope="col" className={`px-3 py-2 text-right font-medium sm:px-4 ${id === strategy ? "text-fg" : ""}`}>
+                  {data.strategies[id].label}
+                  {id === strategy ? <span className="block text-[11px] font-normal text-fg-3">selected</span> : null}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.label} className="border-t border-line">
+                <th scope="row" className="px-3 py-2 text-left font-normal text-fg-2 sm:px-4">
+                  {r.label}
+                </th>
+                {r.values.map((v, i) => (
+                  <td key={ids[i]} className={`num px-3 py-2 text-right text-xs [overflow-wrap:anywhere] sm:px-4 sm:text-sm ${ids[i] === strategy ? "font-medium text-fg" : "text-fg-2"}`}>
+                    {v}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 
 function Lines({ rec, explorerUrl }: { readonly rec: RecommendationDto; readonly explorerUrl: string }) {
+  const power = BigInt(rec.summary?.votingPower ?? "0")
   const [open, setOpen] = useState<string | null>(null)
   return (
     <ol className="divide-y divide-line">
@@ -87,7 +203,10 @@ function Lines({ rec, explorerUrl }: { readonly rec: RecommendationDto; readonly
               </span>
               <span className="num col-start-2 text-sm md:col-start-auto">
                 <span className={ui.label}>Proposed votes</span>
-                <span className="block font-medium text-fg">{vemezo(l.predictedVotes)}</span>
+                <span className="block font-medium text-fg">
+                  {vemezo(l.predictedVotes)}
+                  {power > 0n ? <span className="ml-1.5 text-xs font-normal text-fg-3">{percentBps(Number((BigInt(l.predictedVotes) * 10_000n) / power))}</span> : null}
+                </span>
               </span>
               <span className="num col-start-2 text-sm md:col-start-auto">
                 <span className={ui.label}>Gauge weight now / after</span>
@@ -163,7 +282,8 @@ export function RecommendationView({ data, strategy }: { readonly data: Optimize
             <Stat label="Votes past a 5x cap" value={vemezo(s.excessAbove5x)} note={`of ${vemezo(s.votingPower)} veMEZO; ${vemezo(s.roundingRemainder)} left by rounding`} />
           </dl>
           <p className="text-sm leading-relaxed text-fg-2">{s.objectiveNote}</p>
-          <Tradeoff data={data} />
+          <Outcome data={data} rec={rec} />
+          <StrategyComparison data={data} strategy={strategy} />
         </>
       ) : null}
 

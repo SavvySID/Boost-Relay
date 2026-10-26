@@ -60,7 +60,7 @@ async function compute(network: NetworkName, tokenId: bigint, fresh: boolean): P
       phase: snapshot.global.epoch.phase,
     }),
     snapshotCompleteness: snapshot.meta.completeness,
-    candidateMarket: { activePositions: snapshot.summary.livePositions, positionsRead: snapshot.positions.length },
+    candidateMarket: { activePositions: snapshot.summary.livePositions, positionsRead: snapshot.positions.length, atCap: snapshot.summary.atCap },
     token: {
       tokenId: tokenId.toString(),
       owner: position.owner,

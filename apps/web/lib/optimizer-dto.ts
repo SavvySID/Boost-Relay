@@ -54,7 +54,7 @@ export interface OptimizerDto {
   readonly totalVeMezoVotingPower: string
   readonly epoch: { readonly epochStart: string; readonly epochNext: string; readonly voteStart: string; readonly voteEnd: string; readonly phase: string }
   readonly snapshotCompleteness: "complete" | "partial"
-  readonly candidateMarket: { readonly activePositions: number; readonly positionsRead: number }
+  readonly candidateMarket: { readonly activePositions: number; readonly positionsRead: number; /** Active positions at the 5x cap at the source block. */ readonly atCap: number }
   readonly token: OptimizerTokenDto
   readonly strategies: Readonly<Record<StrategyId, { readonly label: string; readonly objective: string; readonly guarantee: string }>>
   readonly recommendations: Readonly<Record<StrategyId, RecommendationDto>>

@@ -53,6 +53,8 @@ export interface PreparedVote {
   /** After this time the prepared vote must be prepared again. */
   readonly expiresAt: string
   readonly simulation: { readonly ok: true; readonly blockNumber: string; readonly simulatedAt: string }
+  /** eth_estimateGas as the account and the current gas price (wei). null when the estimate failed; the wallet shows the final fee. */
+  readonly feeEstimate: { readonly gas: string; readonly gasPrice: string; readonly fee: string } | null
   readonly gates: readonly VoteGate[]
   readonly recommendation: RecommendationDto
   readonly existingVotes: readonly { readonly gauge: string; readonly tokenId: string | null; readonly votes: string }[]

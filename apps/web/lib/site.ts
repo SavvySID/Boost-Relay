@@ -21,4 +21,4 @@ export function isActive(href: string, pathname: string): boolean {
 }
 
 export const SITE_DESCRIPTION =
-  "Independent analytics and vote allocation for Mezo's veBTC boost gauges: see where boosts are underpowered, where veMEZO votes sit above the 5x cap, and build better allocations."
+  "A boost vote optimizer for Mezo: see where veBTC boosts are underpowered and where veMEZO votes sit above the 5x cap, then build and sign a better allocation."

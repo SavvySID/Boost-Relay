@@ -89,7 +89,7 @@ export function BoostMarket() {
     const { data, served } = view
     body = (
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-        <SnapshotNotices data={data} served={served} refreshError={view.refreshError} />
+        <SnapshotNotices data={data} served={served} refreshError={view.refreshError} now={now} />
         <section aria-labelledby="overview-title" className="grid grid-cols-[minmax(0,1fr)] gap-6 rounded-[var(--radius-lg)] bg-warm p-5 sm:p-8">
           <MarketSummary data={data} />
           <VoteAllocation data={data} />

@@ -85,6 +85,7 @@ function prepared(overrides: Partial<PreparedVote> = {}): PreparedVote {
     preparedAt: new Date(NOW).toISOString(),
     expiresAt: new Date(NOW + 120_000).toISOString(),
     simulation: { ok: true, blockNumber: "501", simulatedAt: new Date(NOW).toISOString() },
+    feeEstimate: { gas: "402661", gasPrice: "175", fee: "70465675" },
     gates: [],
     recommendation: { ...stringifyBigints(rec), calldata: null },
     existingVotes: [],

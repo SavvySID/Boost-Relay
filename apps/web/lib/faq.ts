@@ -75,6 +75,12 @@ export const FAQ: readonly FaqItem[] = [
       "No. Incentives shown are what has been posted for the current epoch. Posted incentives and past voting data do not guarantee future earnings, prices or any particular reward for you.",
   },
   {
+    id: "business",
+    question: "How will Boost Relay sustain itself?",
+    answer:
+      "Today everything on Boost Relay is free: there is no fee and no token. The plan, which is not live, keeps the Boost Market and the Vote Optimizer free and charges for extras: alerts for veBTC holders when their boost slips below 5x (with the exact veMEZO needed to get back), and, if Vault Relay ever launches, a small fee on the rewards it compounds.",
+  },
+  {
     id: "advice",
     question: "Is the Vote Optimizer financial advice?",
     answer:

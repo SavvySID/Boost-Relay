@@ -1,0 +1,298 @@
+{
+  "description": "Real BoostVoter inputs and getBoost() outputs captured read-only at one pinned block.",
+  "source": {
+    "network": "testnet",
+    "chainId": 31611,
+    "rpcUrl": "https://rpc.test.mezo.org",
+    "blockNumber": "16388163",
+    "blockTimestamp": "1793047715",
+    "capturedAt": "2026-10-26T20:48:53.644Z",
+    "boostVoter": "0x21d7bDF5a5929AD179F8cA0c9014A0B62ae6Bfd1"
+  },
+  "global": {
+    "totalVeMezoVotingPower": "88615196890249637113321034",
+    "totalUnboostedVeBtcVotingPower": "16931946209638191350"
+  },
+  "positions": [
+    {
+      "tokenId": "257",
+      "gaugeWeight": "279534931247416102454",
+      "unboostedVotingPower": "30000000000000",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "5000000000000000000"
+    },
+    {
+      "tokenId": "16",
+      "gaugeWeight": "34866514866514866514",
+      "unboostedVotingPower": "12790764095224",
+      "storedBoostRaw": "0",
+      "onchainBoost": "3083390668044192327"
+    },
+    {
+      "tokenId": "5",
+      "gaugeWeight": "0",
+      "unboostedVotingPower": "1021735363282507315",
+      "storedBoostRaw": "1000000000000000000",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "4",
+      "gaugeWeight": "5133485133485133485",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "316",
+      "gaugeWeight": "926224397670442253517098",
+      "unboostedVotingPower": "1100000000000000",
+      "storedBoostRaw": "0",
+      "onchainBoost": "5000000000000000000"
+    },
+    {
+      "tokenId": "27",
+      "gaugeWeight": "754604125728",
+      "unboostedVotingPower": "100000000000000",
+      "storedBoostRaw": "1000000005849165290",
+      "onchainBoost": "1000000005767020879"
+    },
+    {
+      "tokenId": "94",
+      "gaugeWeight": "0",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "0",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "326",
+      "gaugeWeight": "461233871090946570179388",
+      "unboostedVotingPower": "1000000000000000",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "5000000000000000000"
+    },
+    {
+      "tokenId": "81",
+      "gaugeWeight": "234667004342528",
+      "unboostedVotingPower": "1000000000000000",
+      "storedBoostRaw": "1000000180007169045",
+      "onchainBoost": "1000000179353807514"
+    },
+    {
+      "tokenId": "164",
+      "gaugeWeight": "0",
+      "unboostedVotingPower": "220000000000000",
+      "storedBoostRaw": "1000000000000000000",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "159",
+      "gaugeWeight": "709360524622947269160",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "2526967242724071008",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "471",
+      "gaugeWeight": "2046565086228100853382130",
+      "unboostedVotingPower": "8151566315300992",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "5000000000000000000"
+    },
+    {
+      "tokenId": "194",
+      "gaugeWeight": "77700808321620899100",
+      "unboostedVotingPower": "2000000033464400",
+      "storedBoostRaw": "1029643446166991151",
+      "onchainBoost": "1029693008222114815"
+    },
+    {
+      "tokenId": "260",
+      "gaugeWeight": "0",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "1118761696581731392",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "195",
+      "gaugeWeight": "45699683435965220805925",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "517",
+      "gaugeWeight": "48927371180522002020321",
+      "unboostedVotingPower": "9267158232404897",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "5000000000000000000"
+    },
+    {
+      "tokenId": "208",
+      "gaugeWeight": "34785036912021",
+      "unboostedVotingPower": "3210000000000000",
+      "storedBoostRaw": "1000000008400602827",
+      "onchainBoost": "1000000008282200828"
+    },
+    {
+      "tokenId": "281",
+      "gaugeWeight": "0",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "1156330305050482554",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "243",
+      "gaugeWeight": "457898098989047953150",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "617",
+      "gaugeWeight": "8664662780695573647833",
+      "unboostedVotingPower": "400000000000000",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "5000000000000000000"
+    },
+    {
+      "tokenId": "297",
+      "gaugeWeight": "15468440417234810745129",
+      "unboostedVotingPower": "3000000000000000",
+      "storedBoostRaw": "4938497329568759806",
+      "onchainBoost": "4940795864709163313"
+    },
+    {
+      "tokenId": "290",
+      "gaugeWeight": "0",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "621",
+      "gaugeWeight": "217499274972121991363762",
+      "unboostedVotingPower": "2500000000000000",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "5000000000000000000"
+    },
+    {
+      "tokenId": "343",
+      "gaugeWeight": "31086179808882627636372",
+      "unboostedVotingPower": "38703640798018617",
+      "storedBoostRaw": "1613068346277951587",
+      "onchainBoost": "1613866875042994284"
+    },
+    {
+      "tokenId": "315",
+      "gaugeWeight": "0",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "645",
+      "gaugeWeight": "1534794878536442083960",
+      "unboostedVotingPower": "100024058933643",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "5000000000000000000"
+    },
+    {
+      "tokenId": "376",
+      "gaugeWeight": "100000",
+      "unboostedVotingPower": "1",
+      "storedBoostRaw": "1000000000000000000",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "478",
+      "gaugeWeight": "0",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "1002994412584550378",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "927",
+      "gaugeWeight": "4795233889043846999631",
+      "unboostedVotingPower": "503063720267585",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "5000000000000000000"
+    },
+    {
+      "tokenId": "377",
+      "gaugeWeight": "1000000000",
+      "unboostedVotingPower": "1000000001000",
+      "storedBoostRaw": "1000000000744513054",
+      "onchainBoost": "1000000000745005632"
+    },
+    {
+      "tokenId": "535",
+      "gaugeWeight": "0",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "1000000000000000000",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "1049",
+      "gaugeWeight": "1362498469784668022416",
+      "unboostedVotingPower": "250379703445909",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "5000000000000000000"
+    },
+    {
+      "tokenId": "406",
+      "gaugeWeight": "1918968421431716720093",
+      "unboostedVotingPower": "50000000522421753",
+      "storedBoostRaw": "1029300269263610851",
+      "onchainBoost": "1029333000108708030"
+    },
+    {
+      "tokenId": "551",
+      "gaugeWeight": "0",
+      "unboostedVotingPower": "10000000000000",
+      "storedBoostRaw": "1000000000000000000",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "320",
+      "gaugeWeight": "22689930034746",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "1000044019790085286",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "1053",
+      "gaugeWeight": "6701632404919152716429",
+      "unboostedVotingPower": "600910793467295",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "5000000000000000000"
+    },
+    {
+      "tokenId": "430",
+      "gaugeWeight": "576951733754715153456",
+      "unboostedVotingPower": "300000000000000",
+      "storedBoostRaw": "2467951366860893780",
+      "onchainBoost": "2469863118187296501"
+    },
+    {
+      "tokenId": "554",
+      "gaugeWeight": "0",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "1000000000000000000",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "344",
+      "gaugeWeight": "91950834666605312604712",
+      "unboostedVotingPower": "0",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "1000000000000000000"
+    },
+    {
+      "tokenId": "1066",
+      "gaugeWeight": "12382281484650916052701",
+      "unboostedVotingPower": "1001517852506058",
+      "storedBoostRaw": "5000000000000000000",
+      "onchainBoost": "5000000000000000000"
+    }
+  ]
+}

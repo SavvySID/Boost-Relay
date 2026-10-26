@@ -167,8 +167,14 @@ describe("GET /api/vote/receipt", () => {
       transaction: { from: ACCOUNT, to: BOOST_VOTER, input: "0x7ac09bf7" },
     })
     const { TransactionReceiptNotFoundError } = await import("viem")
+    client.getTransactionReceipt.mockRejectedValue(new TransactionReceiptNotFoundError({ hash: HASH as Hex }))
+    expect(await readReceipt("testnet", HASH, client, { delayMs: 0 })).toMatchObject({ ok: true, status: "pending", transaction: null })
+    client.getTransactionReceipt.mockReset()
+    client.getTransactionReceipt.mockImplementation(async () => ({ status: "success" as const, blockNumber: 9n, gasUsed: 21_000n }))
+    // The public testnet RPC sometimes answers "not found" for a mined transaction: retried, then found.
     client.getTransactionReceipt.mockRejectedValueOnce(new TransactionReceiptNotFoundError({ hash: HASH as Hex }))
-    expect(await readReceipt("testnet", HASH, client)).toMatchObject({ ok: true, status: "pending", transaction: null })
+    client.getTransactionReceipt.mockRejectedValueOnce(new TransactionReceiptNotFoundError({ hash: HASH as Hex }))
+    expect(await readReceipt("testnet", HASH, client, { delayMs: 0 })).toMatchObject({ ok: true, status: "success" })
     client.getTransactionReceipt.mockRejectedValueOnce(new HttpRequestError({ url: "https://user:secret@rpc.example/key123" }))
     const failed = await readReceipt("testnet", HASH, client)
     expect(failed).toMatchObject({ ok: false, error: { code: "receipt-unavailable" } })

@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { MAINNET_EXAMPLES, isMainnetExample } from "@/lib/examples"
 import type { NetworkName } from "@/lib/market-dto"
 import type { OptimizerDto, OptimizerResponse } from "@/lib/optimizer-dto"
 import { ui } from "@/lib/ui"
@@ -14,6 +15,7 @@ import { RecommendationView } from "./recommendation-view"
 import { StrategySelector, type Strategy } from "./strategy-selector"
 import { TokenCard } from "./token-card"
 import { VotePanel } from "./vote-panel"
+import { VoteTiming } from "./vote-timing"
 
 type View =
   | { readonly phase: "idle" }
@@ -81,9 +83,17 @@ export function VoteOptimizer() {
     if (!TOKEN_PATTERN.test(id)) return
     const q = new URLSearchParams(params.toString())
     q.set("token", id)
-    if (id === urlToken) void load(network, id)
+    q.delete("example")
+    if (id === urlToken && params.get("example") === null) void load(network, id)
     else router.replace(`${pathname}?${q.toString()}`, { scroll: false })
   }
+
+  /** Loads a public mainnet NFT for read-only analysis (mainnet is the default network, so no ?network). */
+  const tryExample = (id: string) => {
+    setInput(id)
+    router.replace(`${pathname}?token=${id}&example=1`, { scroll: false })
+  }
+  const exampleMode = params.get("example") === "1" && network === "mainnet" && isMainnetExample(urlToken.replace(/^#/, ""))
 
   const valid = TOKEN_PATTERN.test(input.trim())
   const busy = view.phase === "loading"
@@ -139,14 +149,22 @@ export function VoteOptimizer() {
             </button>
           </form>
           {input.trim() !== "" && !valid ? <p className="mt-2 text-sm text-danger-fg">Use a whole-number token id, such as 1024.</p> : null}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-fg-2">No veMEZO NFT? Try a real one from Mezo Mainnet:</span>
+            {MAINNET_EXAMPLES.map((e) => (
+              <button key={e.tokenId} type="button" onClick={() => tryExample(e.tokenId)} title={e.note} disabled={busy} className={`${ui.btnSecondary} bg-surface px-3.5 py-1.5`}>
+                Example #{e.tokenId}
+              </button>
+            ))}
+          </div>
         </section>
 
         {view.phase === "idle" ? (
           <div className={`${ui.card} ${ui.cardBody} text-sm text-fg-2`}>
             <p className="font-medium text-fg">No veMEZO selected</p>
             <p className="mt-1 max-w-[68ch] leading-relaxed">
-              The optimizer needs a token id to read its voting power and any votes it already holds. Nothing on the market changes until a vote is signed
-              by the NFT&apos;s owner, which this phase does not support.
+              Enter a token id, or pick an example above. The optimizer reads the NFT&apos;s voting power and any votes it already holds; nothing changes on-chain
+              unless the NFT&apos;s owner signs a vote on Mezo Testnet.
             </p>
           </div>
         ) : null}
@@ -168,7 +186,17 @@ export function VoteOptimizer() {
 
         {ready ? (
           <>
+            {exampleMode ? (
+              <div role="status" className="rounded-[var(--radius-md)] bg-info-bg px-4 py-3 text-sm text-info-fg">
+                <p className="font-medium">Example mode: read-only analysis</p>
+                <p className="mt-1 leading-relaxed">
+                  veMEZO #{ready.tokenId} is a public Mezo Mainnet NFT owned by someone else. {MAINNET_EXAMPLES.find((e) => e.tokenId === ready.tokenId)?.note} Everything below
+                  is computed from live chain data; Boost Relay cannot vote for this NFT, and voting on mainnet is disabled.
+                </p>
+              </div>
+            ) : null}
             <TokenCard data={ready.data} />
+            <VoteTiming epoch={ready.data.epoch} nowMs={now} />
             <StrategySelector value={strategy} onChange={setStrategy} data={ready.data} />
             <RecommendationView data={ready.data} strategy={strategy} />
             <VotePanel data={ready.data} strategy={strategy} network={network} onRefresh={refreshAfterVote} />

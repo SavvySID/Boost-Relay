@@ -1,5 +1,5 @@
 import { integer } from "@/lib/market-formatting"
-import { FILTERS, SORTS, type PositionFilter, type SortDirection, type SortKey } from "@/lib/market-view"
+import { FILTERS, PRESETS, SORTS, type PositionFilter, type SortDirection, type SortKey } from "@/lib/market-view"
 import { ui } from "@/lib/ui"
 
 export function MarketFilters(props: {
@@ -12,8 +12,25 @@ export function MarketFilters(props: {
   readonly onSortKey: (k: SortKey) => void
   readonly sortDirection: SortDirection
   readonly onSortDirection: (d: SortDirection) => void
+  readonly onPreset: (p: (typeof PRESETS)[number]) => void
 }) {
+  const activePreset = PRESETS.find((p) => p.filter === props.filter && p.sortKey === props.sortKey && p.sortDirection === props.sortDirection)?.id ?? null
   return (
+    <>
+    <div className="mt-4 flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] bg-warm px-3 py-2.5">
+      <span className="text-sm font-medium text-fg">Where a vote helps:</span>
+      {PRESETS.map((p) => (
+        <button
+          key={p.id}
+          type="button"
+          aria-pressed={activePreset === p.id}
+          onClick={() => props.onPreset(p)}
+          className={`rounded-full px-3 py-1 text-sm transition-colors ${activePreset === p.id ? "bg-fg text-white" : "bg-surface text-fg-2 hover:text-fg"}`}
+        >
+          {p.label}
+        </button>
+      ))}
+    </div>
     <div className="mt-4 flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
       <div role="group" aria-label="Filter positions" className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 md:flex-wrap md:overflow-visible md:pb-0">
         {FILTERS.map((f) => {
@@ -62,5 +79,6 @@ export function MarketFilters(props: {
         </button>
       </div>
     </div>
+    </>
   )
 }

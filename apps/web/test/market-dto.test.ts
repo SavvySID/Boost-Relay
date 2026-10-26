@@ -10,7 +10,7 @@ import {
 } from "@boost-relay/mezo"
 import { toMarketDto } from "@/lib/server/to-dto"
 import { compact, integer, basisPoints, boostDelta } from "@/lib/market-formatting"
-import { filterCounts, matchesSearch, viewPositions } from "@/lib/market-view"
+import { PRESETS, filterCounts, matchesSearch, viewPositions } from "@/lib/market-view"
 
 const P = PRECISION
 const tokens = (n: bigint): bigint => n * P
@@ -103,6 +103,12 @@ describe("toMarketDto", () => {
     expect(dto.positions[0]?.incentives.tokens[0]).toEqual({ token: MEZO, symbol: "MEZO", decimals: 18, postedForEpoch: tokens(80_000n).toString() })
   })
 
+  it("filters to active positions with a non-zero incentive posted this epoch", () => {
+    // #1 has 80,000 MEZO posted; #2 was read and has none; the rest are unavailable or not read.
+    expect(filterCounts(dto.positions)["with-incentives"]).toBe(1)
+    expect(viewPositions(dto.positions, { filter: "with-incentives", query: "", sortKey: "votes", sortDirection: "desc" }).map((p) => p.tokenId)).toEqual(["1"])
+  })
+
   it("derives status counts, buckets and additional weight from the same snapshot", () => {
     expect(dto.derived.statusCounts).toEqual({ active: 4, "gauge-killed": 1, "no-lock": 0, expired: 1, "no-power": 0 })
     expect(dto.derived.liveMatchesActive).toBe(true)
@@ -131,7 +137,7 @@ describe("market view (client-side filtering never refetches)", () => {
   )
 
   it("counts each filter from statuses", () => {
-    expect(filterCounts(dto.positions)).toEqual({ all: 5, "below-cap": 3, "no-votes": 1, "at-cap": 1, inactive: 1 })
+    expect(filterCounts(dto.positions)).toEqual({ all: 5, "below-cap": 3, "no-votes": 1, "at-cap": 1, "with-incentives": 0, inactive: 1 })
   })
 
   it("searches token ids by prefix and addresses case-insensitively", () => {
@@ -148,6 +154,18 @@ describe("market view (client-side filtering never refetches)", () => {
     expect(order("votes", "desc")).toEqual(["2", "12", "1", "4", "3"])
     expect(order("to-max", "asc")).toEqual(["2", "12", "1", "3", "4"]) // 2 at cap needs 0; 4 expired is n/a
     expect(order("to-max", "desc").at(-1)).toBe("4")
+  })
+
+  it("one-click views find where another vote would add boost", () => {
+    const view = (id: string) => {
+      const p = PRESETS.find((x) => x.id === id)
+      if (p === undefined) throw new Error(id)
+      return viewPositions(dto.positions, { filter: p.filter, query: "", sortKey: p.sortKey, sortDirection: p.sortDirection }).map((x) => x.tokenId)
+    }
+    // Below-cap active positions only (never #2 at the cap or #4 expired), cheapest first.
+    expect(view("closest")).toEqual(["12", "1", "3"])
+    expect(view("most-needed")).toEqual(["3", "1", "12"])
+    expect(view("lowest")[0]).toBe("3") // no votes, 1x
   })
 })
 

@@ -73,3 +73,10 @@ export function relativeAge(unixSeconds: Uint, nowMs: number): string {
   if (seconds < 86_400) return `${Math.floor(seconds / 3600)} h ago`
   return `${Math.floor(seconds / 86_400)} d ago`
 }
+
+/** A network fee in satoshis (1 sat = 1e10 wei), two significant digits. Testnet fees are fractions of a sat. */
+export function satsFromWei(wei: string): string {
+  const sats = Number(BigInt(wei)) / 1e10
+  if (sats === 0) return "0 sats"
+  return `${Number(sats.toPrecision(2)).toLocaleString("en-US", { maximumSignificantDigits: 2 })} sats`
+}

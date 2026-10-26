@@ -7,8 +7,9 @@ import type { PositionDto } from "./market-dto"
  * - "no-votes": active positions with zero gauge weight
  * - "at-cap": active positions at exactly 5x
  * - "inactive": anything not active (expired lock, no power, no lock, killed gauge)
+ * - "with-incentives": active positions whose gauge has a non-zero incentive posted this epoch
  */
-export type PositionFilter = "all" | "below-cap" | "no-votes" | "at-cap" | "inactive"
+export type PositionFilter = "all" | "below-cap" | "no-votes" | "at-cap" | "with-incentives" | "inactive"
 export type SortKey = "votes" | "boost" | "to-max" | "expiry"
 export type SortDirection = "asc" | "desc"
 
@@ -17,6 +18,7 @@ export const FILTERS: readonly { readonly id: PositionFilter; readonly label: st
   { id: "below-cap", label: "Below 5x" },
   { id: "no-votes", label: "No votes" },
   { id: "at-cap", label: "At 5x" },
+  { id: "with-incentives", label: "With incentives" },
   { id: "inactive", label: "Expired or inactive" },
 ]
 
@@ -38,13 +40,23 @@ export function matchesFilter(p: PositionDto, filter: PositionFilter): boolean {
       return active && p.gaugeWeight === "0"
     case "at-cap":
       return active && p.atCap
+    case "with-incentives":
+      return active && p.incentives.status === "posted" && p.incentives.tokens.some((t) => t.postedForEpoch !== "0")
     case "inactive":
       return !active
   }
 }
 
+/** One-click views for "where would another vote actually help?". */
+export const PRESETS: readonly { readonly id: string; readonly label: string; readonly filter: PositionFilter; readonly sortKey: SortKey; readonly sortDirection: SortDirection }[] = [
+  { id: "closest", label: "Closest to 5x", filter: "below-cap", sortKey: "to-max", sortDirection: "asc" },
+  { id: "lowest", label: "Lowest boost", filter: "below-cap", sortKey: "boost", sortDirection: "asc" },
+  { id: "most-needed", label: "Needs the most votes", filter: "below-cap", sortKey: "to-max", sortDirection: "desc" },
+  { id: "incentives", label: "Posted incentives", filter: "with-incentives", sortKey: "to-max", sortDirection: "asc" },
+]
+
 export function filterCounts(positions: readonly PositionDto[]): Record<PositionFilter, number> {
-  const counts: Record<PositionFilter, number> = { all: 0, "below-cap": 0, "no-votes": 0, "at-cap": 0, inactive: 0 }
+  const counts: Record<PositionFilter, number> = { all: 0, "below-cap": 0, "no-votes": 0, "at-cap": 0, "with-incentives": 0, inactive: 0 }
   for (const p of positions) for (const f of FILTERS) if (matchesFilter(p, f.id)) counts[f.id]++
   return counts
 }

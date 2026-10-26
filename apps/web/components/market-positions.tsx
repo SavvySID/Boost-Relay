@@ -53,6 +53,12 @@ export function MarketPositions({ data }: { readonly data: MarketDto }) {
         onSortKey={setSortKey}
         sortDirection={sortDirection}
         onSortDirection={setSortDirection}
+        onPreset={(p) => {
+          setFilter(p.filter)
+          setSortKey(p.sortKey)
+          setSortDirection(p.sortDirection)
+          setLimit(PAGE)
+        }}
       />
 
       {rows.length === 0 ? (
